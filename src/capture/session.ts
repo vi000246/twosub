@@ -94,8 +94,12 @@ export class CaptureSession {
 
   private playerEl(): HTMLElement | null {
     const v = this.getVideo();
-    const container = v?.closest('.watch-video, #movie_player, .html5-video-player');
-    return (container as HTMLElement | null) ?? v?.parentElement ?? null;
+    if (!v) return null;
+    return (
+      (v.closest(
+        '.watch-video, .watch-video--player-view, #movie_player, .html5-video-player, [data-uia="player"]',
+      ) as HTMLElement | null) ?? v.parentElement
+    );
   }
 
   private loop = (): void => {
@@ -105,6 +109,9 @@ export class CaptureSession {
       this.overlay.render(null, null);
       return;
     }
+    // Mount every frame until the player is available (manifest is captured before <video> exists).
+    const player = this.playerEl();
+    if (player) this.overlay.mount(player);
     if (v.paused !== this.lastPaused) {
       this.lastPaused = v.paused;
       this.overlay.setPaused(v.paused);

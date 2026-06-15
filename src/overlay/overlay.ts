@@ -121,7 +121,8 @@ export class Overlay {
       this.enEl.replaceChildren(...(en ? tokenize(en) : []));
       this.hidePopup(); // line changed — drop any stale popup
     }
-    this.hideEl.textContent = en ? this.hideCss : ''; // only hide native subs when we show ours
+    // Hide native subs only when our overlay is actually mounted AND showing a line.
+    this.hideEl.textContent = en && this.host.isConnected ? this.hideCss : '';
     this.zhEl.textContent = zh ?? '';
     this.enEl.style.visibility = en ? 'visible' : 'hidden';
     this.zhEl.style.visibility = zh ? 'visible' : 'hidden';
