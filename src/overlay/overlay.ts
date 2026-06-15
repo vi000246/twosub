@@ -140,6 +140,10 @@ export class Overlay {
     this.host.style.setProperty('--ts-controls-offset', `${Math.round(px)}px`);
   }
 
+  isPopupOpen(): boolean {
+    return !this.popup.hidden;
+  }
+
   // Toggle off → hide our two lines and let the platform's native subtitles show.
   setActive(active: boolean): void {
     this.active = active;

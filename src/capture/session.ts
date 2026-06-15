@@ -235,7 +235,9 @@ export class CaptureSession {
       this.overlay.setPaused(v.paused);
     }
     if (player && ++this.frame % 10 === 0) {
-      this.updateControlsOffset(player);
+      // Freeze the subtitle position while the lookup popup is open, so the controls
+      // auto-hiding doesn't shift the word out from under the cursor and dismiss it.
+      if (!this.overlay.isPopupOpen()) this.updateControlsOffset(player);
       this.ensureToggle(player);
     }
     if (!this.active) return; // toggled off in the player → native subtitles show, render nothing
