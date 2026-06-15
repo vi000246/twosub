@@ -43,6 +43,7 @@ export class CaptureSession {
     console.log('[TwoSub] session started:', this.platform);
     this.overlay.setHandlers({
       lookup: (word, sentence) => sendMsg('LOOKUP_WORD', { word, sentence, src: 'en', tgt: 'zh' }),
+      dict: (word) => sendMsg('DICT_LOOKUP', { word }),
       speak: (word) => {
         if (this.settings.lookup.ttsEnabled) ttsSpeak(word, this.settings.lookup.ttsRate);
       },

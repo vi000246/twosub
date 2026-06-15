@@ -4,7 +4,7 @@ import { Lru, cueKey } from '../core/lru';
 import { GeminiProvider } from './provider/gemini';
 import { makeWordLookup } from './wordlookup';
 import { ProviderError, type TranslationProvider, type WordMeaning } from './provider/provider';
-import type { CueText, Msg } from '../types/messages';
+import type { CueText, DictResult, Msg } from '../types/messages';
 
 export interface Orchestrator {
   translate(cues: CueText[], src: string, tgt: string): Promise<CueText[]>;
@@ -49,6 +49,7 @@ export function makeOrchestrator(
 export function registerHandlers(): void {
   const cache = new Lru<string>(4000);
   const wordCache = new Lru<WordMeaning>(2000);
+  const dictCache = new Lru<DictResult>(2000);
   onMsg(async (msg: Msg): Promise<unknown> => {
     switch (msg.type) {
       case 'GET_SETTINGS':
@@ -86,8 +87,39 @@ export function registerHandlers(): void {
           return { meaning: '', error };
         }
       }
+      case 'DICT_LOOKUP':
+        return dictLookup(msg.payload.word, dictCache);
       default:
         return undefined;
     }
   });
+}
+
+const DICT_API = (w: string) =>
+  `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(w)}`;
+
+// Free dictionary (no key): phonetic + part-of-speech + definitions/examples. Cached by word.
+async function dictLookup(word: string, cache: Lru<DictResult>): Promise<DictResult> {
+  const key = word.toLowerCase();
+  const hit = cache.get(key);
+  if (hit) return hit;
+  try {
+    const res = await fetch(DICT_API(word));
+    if (!res.ok) return { meanings: [], error: 'NOT_FOUND' };
+    const data: any = await res.json();
+    const entry = Array.isArray(data) ? data[0] : null;
+    if (!entry) return { meanings: [] };
+    const phonetic = entry.phonetic ?? entry.phonetics?.find((p: any) => p.text)?.text ?? undefined;
+    const meanings = (entry.meanings ?? []).slice(0, 4).map((m: any) => ({
+      pos: m.partOfSpeech ?? '',
+      defs: (m.definitions ?? [])
+        .slice(0, 2)
+        .map((d: any) => ({ def: d.definition ?? '', example: d.example })),
+    }));
+    const out: DictResult = { phonetic, meanings };
+    cache.set(key, out);
+    return out;
+  } catch {
+    return { meanings: [], error: 'DICT_ERROR' };
+  }
 }

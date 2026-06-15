@@ -14,6 +14,7 @@ export default defineConfig({
       '*://*.youtube.com/*',
       '*://*.max.com/*',
       '*://*.hbomax.com/*',
+      'https://api.dictionaryapi.dev/*',
     ],
     // MAIN-world sniffers, injected by the content scripts.
     web_accessible_resources: [

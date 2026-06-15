@@ -3,9 +3,11 @@ import type { MsgResult } from '../types/messages';
 import { settingsToCssVars } from './style';
 
 type LookupResult = MsgResult['LOOKUP_WORD'];
+type DictResult = MsgResult['DICT_LOOKUP'];
 
 export interface OverlayHandlers {
   lookup: (word: string, sentence: string) => Promise<LookupResult>;
+  dict: (word: string) => Promise<DictResult>;
   speak: (word: string) => void;
 }
 
@@ -27,16 +29,23 @@ const BASE_CSS = `
 .ts-zh { font-size: calc(var(--ts-font-size, 26px) * .82); opacity: .95; }
 .ts-w { pointer-events: auto; }
 .ts-container.ts-paused .ts-w:hover { background: rgba(80,140,255,.55); border-radius:3px; cursor:pointer; }
-.ts-popup { position:absolute; pointer-events:auto; max-width:280px; transform:translateX(-50%);
-  background:#1e1e1e; color:#fff; border:1px solid #444; border-radius:8px; padding:8px 10px;
-  font-family:system-ui, sans-serif; font-size:15px; line-height:1.4; text-align:left;
-  box-shadow:0 4px 16px rgba(0,0,0,.5); }
+.ts-popup { position:absolute; pointer-events:auto; width:max-content; max-width:340px; max-height:50vh;
+  overflow-y:auto; transform:translateX(-50%);
+  background:#1e1e1e; color:#eee; border:1px solid #444; border-radius:8px; padding:10px 12px;
+  font-family:system-ui, sans-serif; font-size:14px; line-height:1.45; text-align:left;
+  box-shadow:0 6px 20px rgba(0,0,0,.55); }
 .ts-popup[hidden]{ display:none; }
-.ts-popup .ts-word{ font-weight:600; }
-.ts-popup .ts-pos{ color:#9aa; font-size:12px; margin-left:6px; }
-.ts-popup .ts-mean{ margin-top:4px; }
+.ts-dhead{ display:flex; align-items:baseline; gap:6px; }
+.ts-popup .ts-word{ font-weight:700; font-size:17px; }
+.ts-popup .ts-phon{ color:#8ab; font-size:13px; }
+.ts-popup .ts-mean{ margin:4px 0 2px; color:#7fdca0; font-size:15px; }
+.ts-popup .ts-pos{ color:#f3a766; font-style:italic; font-size:12px; margin-top:7px; }
+.ts-popup ol{ margin:2px 0 0; padding-left:18px; }
+.ts-popup li{ margin:1px 0; }
+.ts-popup .ts-ex{ display:block; color:#9aa; font-style:italic; font-size:12px; }
+.ts-popup .ts-note{ color:#caa; }
 .ts-popup .ts-speak{ pointer-events:auto; cursor:pointer; background:none; border:none;
-  color:#7bf; font-size:16px; padding:0; margin-right:4px; }
+  color:#7bf; font-size:17px; padding:0; line-height:1; }
 `;
 
 // Shadow-DOM dual-subtitle overlay. EN line is tokenized into per-word spans; when paused,
@@ -191,20 +200,26 @@ export class Overlay {
     if (!word) return;
     this.activeWordEl = el;
     this.positionPopup(el);
-    this.popup.innerHTML = `<span class="ts-word">${esc(word)}</span> <span class="ts-mean">…</span>`;
+    this.popup.innerHTML =
+      `<div class="ts-dhead"><button class="ts-speak" title="發音">🔊</button>` +
+      `<span class="ts-word">${esc(word)}</span></div><div class="ts-note">查詢中…</div>`;
     this.popup.hidden = false;
+    this.popup.scrollTop = 0;
+    this.popup
+      .querySelector('.ts-speak')
+      ?.addEventListener('click', () => this.handlers?.speak(word));
     if (speak) this.handlers?.speak(word);
     if (!this.handlers) return;
-    try {
-      const r = await this.handlers.lookup(word, this.currentEn ?? word);
-      if (this.activeWordEl !== el || this.popup.hidden) return; // user moved on / popup closed
-      this.popup.innerHTML = r.error || !r.meaning ? noResultHtml(word) : resultHtml(word, r);
-      this.popup
-        .querySelector('.ts-speak')
-        ?.addEventListener('click', () => this.handlers?.speak(word));
-    } catch {
-      this.popup.innerHTML = noResultHtml(word);
-    }
+    const h = this.handlers;
+    const [meaning, dict] = await Promise.all([
+      Promise.resolve(h.lookup(word, this.currentEn ?? word)).catch(() => null),
+      Promise.resolve(h.dict(word)).catch(() => null),
+    ]);
+    if (this.activeWordEl !== el || this.popup.hidden) return; // user moved on / popup closed
+    this.popup.innerHTML = dictCardHtml(word, meaning, dict);
+    this.popup
+      .querySelector('.ts-speak')
+      ?.addEventListener('click', () => this.handlers?.speak(word));
   }
 
   private positionPopup(el: HTMLElement): void {
@@ -251,23 +266,44 @@ function esc(s: string): string {
   );
 }
 
-function resultHtml(word: string, r: LookupResult): string {
-  const pos = r.pos ? `<span class="ts-pos">${esc(r.pos)}</span>` : '';
-  const lemma =
-    r.lemma && r.lemma.toLowerCase() !== word.toLowerCase()
-      ? `<span class="ts-pos">(${esc(r.lemma)})</span>`
-      : '';
-  return (
-    `<div><button class="ts-speak" title="Pronounce">🔊</button>` +
-    `<span class="ts-word">${esc(word)}</span> ${lemma}${pos}</div>` +
-    `<div class="ts-mean">${esc(r.meaning)}</div>`
-  );
-}
+function dictCardHtml(word: string, meaning: LookupResult | null, dict: DictResult | null): string {
+  const phon = dict?.phonetic ? `<span class="ts-phon">${esc(dict.phonetic)}</span>` : '';
+  const head =
+    `<div class="ts-dhead"><button class="ts-speak" title="發音">🔊</button>` +
+    `<span class="ts-word">${esc(word)}</span> ${phon}</div>`;
 
-function noResultHtml(word: string): string {
-  return (
-    `<div><button class="ts-speak" title="Pronounce">🔊</button>` +
-    `<span class="ts-word">${esc(word)}</span></div>` +
-    `<div class="ts-mean" style="color:#c99">no result</div>`
-  );
+  const zhText = meaning && !meaning.error ? meaning.meaning : '';
+  const lemma =
+    meaning?.lemma && meaning.lemma.toLowerCase() !== word.toLowerCase()
+      ? ` <span class="ts-phon">(${esc(meaning.lemma)})</span>`
+      : '';
+  const zh = zhText ? `<div class="ts-mean">${esc(zhText)}${lemma}</div>` : '';
+
+  let defs = '';
+  if (dict && dict.meanings.length) {
+    defs = dict.meanings
+      .map(
+        (m) =>
+          `<div class="ts-pos">${esc(m.pos)}</div><ol>` +
+          m.defs
+            .map(
+              (d) =>
+                `<li>${esc(d.def)}${
+                  d.example ? `<span class="ts-ex">“${esc(d.example)}”</span>` : ''
+                }</li>`,
+            )
+            .join('') +
+          `</ol>`,
+      )
+      .join('');
+  }
+
+  if (!zh && !defs) {
+    const note =
+      meaning?.error === 'PROVIDER_NO_KEY'
+        ? '設定 Gemini key 後可顯示中文翻譯；字典查無此字。'
+        : '查無結果';
+    defs = `<div class="ts-note">${esc(note)}</div>`;
+  }
+  return head + zh + defs;
 }
