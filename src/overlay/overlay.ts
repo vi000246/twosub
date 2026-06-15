@@ -50,6 +50,7 @@ export class Overlay {
   private hideEl: HTMLStyleElement;
   private hideCss: string;
 
+  private active = true;
   private paused = false;
   private currentEn: string | null = null;
   private handlers?: OverlayHandlers;
@@ -120,7 +121,19 @@ export class Overlay {
     this.host.style.setProperty('--ts-controls-offset', `${Math.round(px)}px`);
   }
 
+  // Toggle off → hide our two lines and let the platform's native subtitles show.
+  setActive(active: boolean): void {
+    this.active = active;
+    if (!active) {
+      this.hideEl.textContent = '';
+      this.enEl.style.visibility = 'hidden';
+      this.zhEl.style.visibility = 'hidden';
+      this.hidePopup();
+    }
+  }
+
   render(en: string | null, zh: string | null): void {
+    if (!this.active) return;
     if (en !== this.currentEn) {
       this.currentEn = en;
       this.enEl.replaceChildren(...(en ? tokenize(en) : []));

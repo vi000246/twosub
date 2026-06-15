@@ -24,6 +24,8 @@ export class CaptureSession {
   private frame = 0;
   private lastControlsOffset = -1;
   private lastVideoId = '';
+  private active = true;
+  private toggleBtn: HTMLButtonElement | null = null;
   private stopWatch?: () => void;
   private settings!: Settings;
 
@@ -57,6 +59,7 @@ export class CaptureSession {
     window.removeEventListener(CUES_EVENT, this.onCues);
     this.stopWatch?.();
     cancelAnimationFrame(this.raf);
+    this.toggleBtn?.remove();
     this.overlay.destroy();
   }
 
@@ -154,6 +157,56 @@ export class CaptureSession {
     return Math.min(Math.max(pr.bottom - br.top + 8, 0), pr.height * 0.4);
   }
 
+  // A toggle injected into the player's native control bar: off → hide our overlay so the
+  // platform's own subtitles show.
+  private ensureToggle(player: HTMLElement): void {
+    if (!this.toggleBtn) {
+      const b = document.createElement('button');
+      b.className = 'twosub-toggle ytp-button';
+      b.textContent = '雙字';
+      b.style.cssText =
+        'cursor:pointer;background:transparent;border:none;color:#fff;font:600 14px/1.2 system-ui;' +
+        'display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:100%;' +
+        'vertical-align:top;';
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        this.toggleActive();
+      });
+      this.toggleBtn = b;
+      this.updateToggle();
+    }
+    const target = this.toggleTarget(player);
+    if (target && this.toggleBtn.parentElement !== target) target.prepend(this.toggleBtn);
+  }
+
+  private toggleTarget(player: HTMLElement): HTMLElement | null {
+    if (this.platform === 'youtube') {
+      return document.querySelector<HTMLElement>(
+        '#movie_player .ytp-right-controls-left, #movie_player .ytp-right-controls',
+      );
+    }
+    if (this.platform === 'netflix') {
+      return player.querySelector<HTMLElement>('.watch-video--bottom-controls-container');
+    }
+    return null;
+  }
+
+  private toggleActive(): void {
+    this.active = !this.active;
+    this.overlay.setActive(this.active);
+    this.updateToggle();
+  }
+
+  private updateToggle(): void {
+    if (!this.toggleBtn) return;
+    this.toggleBtn.style.opacity = this.active ? '1' : '0.45';
+    this.toggleBtn.setAttribute('aria-pressed', String(this.active));
+    this.toggleBtn.title = this.active
+      ? 'TwoSub 雙字幕：開（點擊關閉，改用原生字幕）'
+      : 'TwoSub 雙字幕：關（點擊開啟）';
+  }
+
   private loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
     const v = this.getVideo();
@@ -168,7 +221,11 @@ export class CaptureSession {
       this.lastPaused = v.paused;
       this.overlay.setPaused(v.paused);
     }
-    if (player && ++this.frame % 10 === 0) this.updateControlsOffset(player);
+    if (player && ++this.frame % 10 === 0) {
+      this.updateControlsOffset(player);
+      this.ensureToggle(player);
+    }
+    if (!this.active) return; // toggled off in the player → native subtitles show, render nothing
 
     const tMs = v.currentTime * 1000;
     const enCue = activeCueAt(this.enCues, tMs);
