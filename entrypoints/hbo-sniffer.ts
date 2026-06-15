@@ -8,6 +8,7 @@ import type { Cue, TrackMeta } from '../src/types/cue';
 // it for WebVTT text tracks, fetch + concatenate the segments, and emit normalized cues.
 // Best-effort + fragile (per the PRD) — segment timing + the native-hide selector need live calibration.
 export default defineUnlistedScript(() => {
+  console.log('[TwoSub] hbo sniffer injected');
   let lastManifest = '';
 
   patchFetch();
@@ -23,6 +24,7 @@ export default defineUnlistedScript(() => {
     const manifestUrl: string | undefined = info?.manifest?.url ?? info?.manifests?.[0]?.url;
     if (!manifestUrl || manifestUrl === lastManifest) return;
     lastManifest = manifestUrl;
+    console.log('[TwoSub] hbo: playbackInfo → manifest', manifestUrl);
     void loadAndEmit(manifestUrl);
   }
 
@@ -34,6 +36,7 @@ export default defineUnlistedScript(() => {
       return;
     }
     const dashTracks = parseDashTextTracks(mpd, manifestUrl);
+    console.log('[TwoSub] hbo: DASH text tracks', dashTracks.length, dashTracks.map((t) => t.lang).join(','));
     if (!dashTracks.length) return;
 
     const tracks: TrackMeta[] = [];
@@ -60,6 +63,7 @@ export default defineUnlistedScript(() => {
       }
     }
     if (cues.length) {
+      console.log('[TwoSub] hbo sniffer: captured', cues.length, 'cues');
       const detail: CuesDetail = { platform: 'hboMax', tracks, cues };
       window.dispatchEvent(new CustomEvent(CUES_EVENT, { detail }));
     }

@@ -7,6 +7,7 @@ import type { Cue } from '../src/types/cue';
 // from intercepted /youtubei/v1/player responses (SPA navigation), fetches json3 cues,
 // and emits them to the content script.
 export default defineUnlistedScript(() => {
+  console.log('[TwoSub] youtube sniffer injected');
   let lastVideo = '';
 
   tryFromGlobal();
@@ -55,6 +56,12 @@ export default defineUnlistedScript(() => {
       }
     }
     if (cues.length) {
+      console.log(
+        '[TwoSub] youtube sniffer: captured',
+        cues.length,
+        'cues; langs:',
+        tracks.map((t) => t.lang).join(','),
+      );
       const detail: CuesDetail = { platform: 'youtube', tracks, cues };
       window.dispatchEvent(new CustomEvent(CUES_EVENT, { detail }));
     }

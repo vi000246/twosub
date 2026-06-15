@@ -35,6 +35,7 @@ export class CaptureSession {
 
   async start(): Promise<void> {
     this.settings = await getSettings();
+    console.log('[TwoSub] session started:', this.platform);
     this.overlay.setHandlers({
       lookup: (word, sentence) => sendMsg('LOOKUP_WORD', { word, sentence, src: 'en', tgt: 'zh' }),
       speak: (word) => {
@@ -75,6 +76,9 @@ export class CaptureSession {
     }
 
     const player = this.playerEl();
+    console.log(
+      `[TwoSub] session(${this.platform}): received ${detail.cues.length} cues; en=${this.enCues.length} needsTranslation=${this.needsTranslation} player=${!!player}`,
+    );
     if (player) this.overlay.mount(player);
     this.overlay.applySettings(this.settings);
   }
@@ -123,6 +127,7 @@ export class CaptureSession {
     })
       .then((res) => {
         if (res.error) {
+          console.warn('[TwoSub] translate error:', res.error);
           upcoming.forEach((c) => this.requested.delete(c.id)); // allow retry on rate-limit/error
           return;
         }

@@ -7,6 +7,7 @@ export default defineContentScript({
   matches: ['*://*.youtube.com/*'],
   runAt: 'document_start',
   async main() {
+    console.log('[TwoSub] youtube content script loaded');
     await injectSniffer('/youtube-sniffer.js');
 
     let session: CaptureSession | null = null;

@@ -7,6 +7,7 @@ export default defineContentScript({
   matches: ['*://*.netflix.com/*'],
   runAt: 'document_start',
   async main() {
+    console.log('[TwoSub] netflix content script loaded');
     await injectSniffer('/netflix-sniffer.js');
 
     let session: CaptureSession | null = null;

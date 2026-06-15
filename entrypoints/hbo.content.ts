@@ -7,6 +7,7 @@ export default defineContentScript({
   matches: ['*://*.max.com/*', '*://*.hbomax.com/*'],
   runAt: 'document_start',
   async main() {
+    console.log('[TwoSub] hbo content script loaded');
     await injectSniffer('/hbo-sniffer.js');
 
     let session: CaptureSession | null = null;

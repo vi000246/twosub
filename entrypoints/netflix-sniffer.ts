@@ -8,6 +8,7 @@ import type { Cue, TrackMeta } from '../src/types/cue';
 // internally via JSON.parse, so we hook that + fetch to discover native text tracks,
 // fetch + parse them in-page, and hand normalized cues to the content script.
 export default defineUnlistedScript(() => {
+  console.log('[TwoSub] netflix sniffer injected');
   let lastSig = '';
 
   patchJsonParse();
@@ -39,6 +40,12 @@ export default defineUnlistedScript(() => {
       }
     }
     if (cues.length) {
+      console.log(
+        '[TwoSub] netflix sniffer: captured',
+        cues.length,
+        'cues; langs:',
+        tracks.map((t) => t.lang).join(','),
+      );
       const detail: CuesDetail = { platform: 'netflix', tracks, cues };
       window.dispatchEvent(new CustomEvent(CUES_EVENT, { detail }));
     }
