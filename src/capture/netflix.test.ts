@@ -28,6 +28,28 @@ describe('pickTextTracks', () => {
     expect(t[1]).toMatchObject({ lang: 'zh-Hant', url: 'https://n/zh.xml', format: 'ttml' });
   });
 
+  it('extracts the URL from nested object / array download shapes', () => {
+    const manifest = {
+      timedtexttracks: [
+        {
+          language: 'en',
+          rawTrackType: 'subtitles',
+          ttDownloadables: {
+            'webvtt-lssdh-ios8': { downloadUrls: { cdn1: { url: 'https://n/obj.vtt' } } },
+          },
+        },
+        {
+          language: 'fr',
+          rawTrackType: 'subtitles',
+          ttDownloadables: { 'webvtt-lssdh-ios8': { urls: [{ cdnId: 'c', url: 'https://n/arr.vtt' }] } },
+        },
+      ],
+    };
+    const t = pickTextTracks(manifest);
+    expect(t[0].url).toBe('https://n/obj.vtt');
+    expect(t[1].url).toBe('https://n/arr.vtt');
+  });
+
   it('skips tracks without downloadables', () => {
     expect(pickTextTracks({ timedtexttracks: [{ language: 'en' }] })).toEqual([]);
   });
