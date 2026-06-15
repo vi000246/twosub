@@ -2,7 +2,8 @@ import { onMsg } from '../core/messaging';
 import { getSettings } from '../core/settings';
 import { Lru, cueKey } from '../core/lru';
 import { GeminiProvider } from './provider/gemini';
-import { ProviderError, type TranslationProvider } from './provider/provider';
+import { makeWordLookup } from './wordlookup';
+import { ProviderError, type TranslationProvider, type WordMeaning } from './provider/provider';
 import type { CueText, Msg } from '../types/messages';
 
 export interface Orchestrator {
@@ -47,6 +48,7 @@ export function makeOrchestrator(
 // Background message handler. Settings are read per call so model/key edits take effect live.
 export function registerHandlers(): void {
   const cache = new Lru<string>(4000);
+  const wordCache = new Lru<WordMeaning>(2000);
   onMsg(async (msg: Msg): Promise<unknown> => {
     switch (msg.type) {
       case 'GET_SETTINGS':
@@ -66,6 +68,22 @@ export function registerHandlers(): void {
           const error = e instanceof ProviderError ? e.code : 'PROVIDER_ERROR';
           // Non-fatal: empty translations + error code; overlay keeps the native English line.
           return { translations: [], error };
+        }
+      }
+      case 'LOOKUP_WORD': {
+        const s = await getSettings();
+        const provider = new GeminiProvider(s.provider.apiKey, s.provider.model);
+        const wl = makeWordLookup(provider, s.provider.model, wordCache);
+        try {
+          return await wl.lookup(
+            msg.payload.word,
+            msg.payload.sentence,
+            msg.payload.src,
+            msg.payload.tgt,
+          );
+        } catch (e) {
+          const error = e instanceof ProviderError ? e.code : 'PROVIDER_ERROR';
+          return { meaning: '', error };
         }
       }
       default:

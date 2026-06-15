@@ -116,7 +116,7 @@ Install unpacked (Firefox `about:debugging` / Brave load-unpacked) → open sett
 | # | Milestone | User-Visible Value | Status | Depends | SRS | Plan |
 |---|-----------|--------------------|--------|---------|-----|------|
 | 1 | Core dual-sub engine + customization (Netflix + YouTube) | Bilingual subtitles (EN top / ZH bottom) on Netflix & YouTube, with native-track-first + Gemini fallback, and adjustable size/opacity/color/position | in-progress | - | `docs/srs/twosub-dual-subtitle-mvp.srs.md` | `docs/plans/twosub-m1-foundation-dual-subtitles.plan.md` |
-| 2 | Instant word lookup + pronunciation | While paused, hover/click an English word → Chinese meaning + audio pronunciation | pending | 1 | - | - |
+| 2 | Instant word lookup + pronunciation | While paused, hover/click an English word → Chinese meaning + audio pronunciation | in-progress | 1 | `docs/srs/twosub-dual-subtitle-mvp.srs.md` | `docs/plans/twosub-m2-word-lookup-pronunciation.plan.md` |
 | 3 | HBO Max support | Same dual-subtitle experience on HBO Max (native track via manifest sniff, Gemini fallback) — best-effort | pending | 1 | - | - |
 | 4 | Cross-browser hardening + open-source release | Verified Firefox + Brave parity; README/setup; pushed to a public GitHub repo | pending | 1,2,3 | - | - |
 

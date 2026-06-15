@@ -13,6 +13,6 @@ export type Msg =
 
 export interface MsgResult {
   TRANSLATE_CUES: { translations: CueText[]; error?: string };
-  LOOKUP_WORD: { meaning: string; lemma?: string; pos?: string };
+  LOOKUP_WORD: { meaning: string; lemma?: string; pos?: string; error?: string };
   GET_SETTINGS: Settings;
 }
