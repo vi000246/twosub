@@ -1,9 +1,6 @@
 import { defineConfig } from 'wxt';
 
 // TwoSub — MV3 extension, built for Firefox + Chromium/Brave from one codebase.
-// web_accessible_resources for the MAIN-world sniffers are added alongside the
-// sniffer entrypoints (capture task), so this config doesn't reference files
-// that don't exist yet.
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
@@ -15,6 +12,13 @@ export default defineConfig({
       'https://generativelanguage.googleapis.com/*',
       '*://*.netflix.com/*',
       '*://*.youtube.com/*',
+    ],
+    // MAIN-world sniffers, injected by the content scripts.
+    web_accessible_resources: [
+      {
+        resources: ['netflix-sniffer.js', 'youtube-sniffer.js'],
+        matches: ['*://*.netflix.com/*', '*://*.youtube.com/*'],
+      },
     ],
   },
 });
