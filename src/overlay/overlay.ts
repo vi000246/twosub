@@ -121,8 +121,9 @@ export class Overlay {
       this.enEl.replaceChildren(...(en ? tokenize(en) : []));
       this.hidePopup(); // line changed — drop any stale popup
     }
-    // Hide native subs only when our overlay is actually mounted AND showing a line.
-    this.hideEl.textContent = en && this.host.isConnected ? this.hideCss : '';
+    // Hide native subs continuously while our overlay is mounted (mounting only happens once we
+    // have cues), so the platform's own subtitle never flashes through during EN cue gaps.
+    this.hideEl.textContent = this.host.isConnected ? this.hideCss : '';
     this.zhEl.textContent = zh ?? '';
     this.enEl.style.visibility = en ? 'visible' : 'hidden';
     this.zhEl.style.visibility = zh ? 'visible' : 'hidden';
