@@ -29,7 +29,12 @@ export default defineUnlistedScript(() => {
       const sig = tracks.map((t) => t.lang + t.url).join('|');
       if (sig === lastSig) return;
       lastSig = sig;
-      console.log('[TwoSub] netflix: manifest found,', tracks.length, 'text tracks');
+      console.log(
+        '[TwoSub] netflix: manifest found,',
+        tracks.length,
+        'usable tracks:',
+        tracks.map((t) => t.lang + '/' + t.format).join(','),
+      );
       void loadAndEmit(tracks);
     } catch {
       /* not a manifest we understand */
@@ -42,10 +47,25 @@ export default defineUnlistedScript(() => {
     for (const t of nf) {
       tracks.push({ lang: t.lang, kind: t.kind, label: t.label, url: t.url });
       try {
-        const text = await (await fetch(t.url)).text();
-        cues.push(...(t.format === 'webvtt' ? parseWebVtt(text, t.lang) : parseTtml(text, t.lang)));
-      } catch {
-        /* one track failed; keep the rest */
+        const res = await fetch(t.url);
+        const text = await res.text();
+        const parsed = t.format === 'webvtt' ? parseWebVtt(text, t.lang) : parseTtml(text, t.lang);
+        console.log(
+          '[TwoSub] netflix track:',
+          t.lang,
+          t.format,
+          'status',
+          res.status,
+          'len',
+          text.length,
+          'cues',
+          parsed.length,
+          '| sample:',
+          text.slice(0, 100).replace(/\n/g, ' '),
+        );
+        cues.push(...parsed);
+      } catch (e) {
+        console.warn('[TwoSub] netflix track failed:', t.lang, String(e));
       }
     }
     if (cues.length) {
