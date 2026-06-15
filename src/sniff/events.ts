@@ -9,6 +9,7 @@ export interface CuesDetail {
   platform: string;
   tracks: TrackMeta[];
   cues: Cue[];
+  videoId?: string; // SPA platforms (YouTube): lets the session reset cues on video change
 }
 
 export interface CommandDetail {

@@ -23,6 +23,7 @@ export class CaptureSession {
   private lastPaused = false;
   private frame = 0;
   private lastControlsOffset = -1;
+  private lastVideoId = '';
   private stopWatch?: () => void;
   private settings!: Settings;
 
@@ -61,6 +62,14 @@ export class CaptureSession {
 
   private handleCues(detail: CuesDetail): void {
     if (detail.platform !== this.platform) return;
+    if (detail.videoId && detail.videoId !== this.lastVideoId) {
+      // New video on an SPA (YouTube) — drop the previous video's cues so they don't linger.
+      this.lastVideoId = detail.videoId;
+      this.enCues = [];
+      this.zhCues = [];
+      this.translated.clear();
+      this.requested.clear();
+    }
     const { learning, native } = this.settings.languages;
     // Pick cues from ONE track per language (preferring a specific variant, e.g. Traditional
     // Chinese) so we never merge two differently-timed tracks into a garbled / drifting line.

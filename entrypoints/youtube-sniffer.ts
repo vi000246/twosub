@@ -3,30 +3,43 @@ import { pickCaptionTracks } from '../src/capture/youtube';
 import { parseYtJson3 } from '../src/capture/parsers/ytjson3';
 import type { Cue, TrackMeta } from '../src/types/cue';
 
-// YouTube MAIN world. `ytInitialPlayerResponse` is set after document_start (so we poll).
-// Timedtext now requires a `pot` (Proof-of-Origin Token); we harvest it from YouTube's own
-// requests and append it (same as InterSub), then fetch the en/zh tracks as json3.
+// YouTube MAIN world. Reads the CURRENT video's player response (survives SPA navigation),
+// harvests the `pot` token, and fetches the en/zh tracks as json3.
 export default defineUnlistedScript(() => {
   console.log('[TwoSub] youtube sniffer injected');
   let lastVideo = '';
+  let curVid = '';
   let loggedPr = false;
   let pot = '';
   let potc = '1';
   let potClient = 'WEB';
   let pendingTracks: TrackMeta[] | null = null;
 
+  // #movie_player.getPlayerResponse() always reflects the CURRENT video (updates on SPA nav),
+  // unlike window.ytInitialPlayerResponse which is frozen to the initial page load.
+  function currentPr(): any {
+    const mp = document.querySelector('#movie_player') as any;
+    const fromPlayer =
+      mp && typeof mp.getPlayerResponse === 'function' ? mp.getPlayerResponse() : null;
+    return fromPlayer ?? (window as any).ytInitialPlayerResponse;
+  }
+
   setInterval(() => {
-    const pr = (window as any).ytInitialPlayerResponse;
+    const pr = currentPr();
     if (pr) void handlePr(pr);
   }, 1000);
   window.addEventListener('yt-navigate-finish', () => {
-    const pr = (window as any).ytInitialPlayerResponse;
+    const pr = currentPr();
     if (pr) void handlePr(pr);
   });
   patchFetch();
   patchXhr();
 
-  // Harvest the pot token from any YouTube request URL that carries one.
+  function emit(tracks: TrackMeta[], cues: Cue[], videoId: string) {
+    const detail: CuesDetail = { platform: 'youtube', tracks, cues, videoId };
+    window.dispatchEvent(new CustomEvent(CUES_EVENT, { detail }));
+  }
+
   function harvest(urlStr: string) {
     try {
       const u = new URL(urlStr, location.href);
@@ -72,7 +85,6 @@ export default defineUnlistedScript(() => {
     };
   }
 
-  // Prefer a manual (non-ASR) track, in language-preference order.
   function pickBest(tracks: TrackMeta[], prefixes: string[]): TrackMeta | undefined {
     for (const p of prefixes) {
       const m = tracks.filter((t) => t.lang.toLowerCase().startsWith(p));
@@ -81,7 +93,8 @@ export default defineUnlistedScript(() => {
     return undefined;
   }
 
-  async function handlePr(pr: any) {
+  async function handlePr(raw: any) {
+    const pr = raw?.videoDetails ? raw : (raw?.playerResponse ?? raw); // unwrap wrapped responses
     if (!loggedPr) {
       loggedPr = true;
       console.log(
@@ -92,6 +105,8 @@ export default defineUnlistedScript(() => {
     const vid: string = pr?.videoDetails?.videoId ?? '';
     if (!vid || vid === lastVideo) return;
     lastVideo = vid;
+    curVid = vid;
+    emit([], [], vid); // immediately clear the previous video's subtitles on navigation
 
     const all = pickCaptionTracks(pr);
     const best = [
@@ -116,6 +131,7 @@ export default defineUnlistedScript(() => {
 
   async function fetchTracks(tracks: TrackMeta[]) {
     if (!pot) return;
+    const vid = curVid;
     const cues: Cue[] = [];
     const used: TrackMeta[] = [];
     for (const t of tracks) {
@@ -136,6 +152,7 @@ export default defineUnlistedScript(() => {
         /* skip failed track */
       }
     }
+    if (vid !== curVid) return; // navigated again while fetching — drop the stale result
     if (cues.length) {
       pendingTracks = null;
       console.log(
@@ -144,8 +161,7 @@ export default defineUnlistedScript(() => {
         'cues; langs:',
         used.map((t) => t.lang).join(','),
       );
-      const detail: CuesDetail = { platform: 'youtube', tracks: used, cues };
-      window.dispatchEvent(new CustomEvent(CUES_EVENT, { detail }));
+      emit(used, cues, vid);
     } else {
       console.warn('[TwoSub] youtube: fetched tracks but parsed 0 cues (will retry on next pot)');
     }
