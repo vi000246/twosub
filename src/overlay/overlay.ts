@@ -20,7 +20,7 @@ const BASE_CSS = `
 .ts-container { display:flex; flex-direction:column; align-items:center; gap:2px; width:100%;
   transform: translateY(calc(-1 * var(--ts-offset-y, 0px) - var(--ts-controls-offset, 0px)));
   transition: transform 0.15s ease; }
-.ts-line { max-width:90%; text-align:center; line-height:1.25;
+.ts-line { max-width:90%; text-align:center; line-height:1.25; min-height:1.25em;
   font-family: system-ui, sans-serif; font-size: var(--ts-font-size, 26px);
   color: var(--ts-color, #fff); background: var(--ts-bg, rgba(0,0,0,.55));
   padding: 0 .4em; border-radius: 4px; text-shadow: 0 1px 2px rgba(0,0,0,.9); }
