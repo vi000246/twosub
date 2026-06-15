@@ -2,6 +2,7 @@ import { CUES_EVENT, type CuesDetail } from '../sniff/events';
 import { selectTracks } from './adapter';
 import { activeCueAt, upcomingCues } from '../overlay/sync';
 import { Overlay } from '../overlay/overlay';
+import { speak as ttsSpeak } from '../overlay/tts';
 import { sendMsg } from '../core/messaging';
 import { getSettings, watchSettings } from '../core/settings';
 import type { Cue, Platform } from '../types/cue';
@@ -19,6 +20,7 @@ export class CaptureSession {
   private requested = new Set<string>();
   private needsTranslation = false;
   private raf = 0;
+  private lastPaused = false;
   private stopWatch?: () => void;
   private settings!: Settings;
 
@@ -33,6 +35,12 @@ export class CaptureSession {
 
   async start(): Promise<void> {
     this.settings = await getSettings();
+    this.overlay.setHandlers({
+      lookup: (word, sentence) => sendMsg('LOOKUP_WORD', { word, sentence, src: 'en', tgt: 'zh' }),
+      speak: (word) => {
+        if (this.settings.lookup.ttsEnabled) ttsSpeak(word, this.settings.lookup.ttsRate);
+      },
+    });
     window.addEventListener(CUES_EVENT, this.onCues);
     this.stopWatch = watchSettings((s) => {
       this.settings = s;
@@ -83,6 +91,10 @@ export class CaptureSession {
     if (!v || this.enCues.length === 0) {
       this.overlay.render(null, null);
       return;
+    }
+    if (v.paused !== this.lastPaused) {
+      this.lastPaused = v.paused;
+      this.overlay.setPaused(v.paused);
     }
     const tMs = v.currentTime * 1000;
     const enCue = activeCueAt(this.enCues, tMs);
