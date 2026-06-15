@@ -1,0 +1,28 @@
+import type { Platform } from './cue';
+
+export const SCHEMA_VERSION = 1;
+
+export interface Settings {
+  enabled: boolean;
+  platforms: Record<Platform, boolean>;
+  languages: { learning: 'en'; native: 'zh'; learningOnTop: boolean };
+  appearance: {
+    fontSizePx: number;
+    bgOpacity: number; // 0..1
+    textColor: string; // hex
+    position: 'bottom' | 'top' | 'custom';
+    offsetY: number; // px, when position = custom
+  };
+  provider: { name: 'gemini'; apiKey: string; model: string };
+  // populated now, consumed in M2 (word lookup + TTS)
+  lookup: { source: 'gemini'; ttsEnabled: boolean; ttsRate: number };
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  enabled: true,
+  platforms: { netflix: true, youtube: true, hboMax: false },
+  languages: { learning: 'en', native: 'zh', learningOnTop: true },
+  appearance: { fontSizePx: 26, bgOpacity: 0.55, textColor: '#ffffff', position: 'bottom', offsetY: 0 },
+  provider: { name: 'gemini', apiKey: '', model: 'gemini-2.5-flash' },
+  lookup: { source: 'gemini', ttsEnabled: true, ttsRate: 0.9 },
+};
