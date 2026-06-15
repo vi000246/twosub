@@ -47,6 +47,7 @@ export class Overlay {
   private zhEl: HTMLElement;
   private popup: HTMLElement;
   private hideEl: HTMLStyleElement;
+  private hideCss: string;
 
   private paused = false;
   private currentEn: string | null = null;
@@ -82,8 +83,10 @@ export class Overlay {
     this.popup.addEventListener('mouseenter', this.cancelHide);
     this.popup.addEventListener('mouseleave', this.scheduleHide);
 
+    // Native subtitles are hidden ONLY while we actually render an English line (see render()),
+    // so if capture fails the user keeps the platform's own subtitles.
+    this.hideCss = NATIVE_HIDE_CSS[platform] ?? '';
     this.hideEl = document.createElement('style');
-    this.hideEl.textContent = NATIVE_HIDE_CSS[platform] ?? '';
     document.documentElement.appendChild(this.hideEl);
   }
 
@@ -118,6 +121,7 @@ export class Overlay {
       this.enEl.replaceChildren(...(en ? tokenize(en) : []));
       this.hidePopup(); // line changed — drop any stale popup
     }
+    this.hideEl.textContent = en ? this.hideCss : ''; // only hide native subs when we show ours
     this.zhEl.textContent = zh ?? '';
     this.enEl.style.visibility = en ? 'visible' : 'hidden';
     this.zhEl.style.visibility = zh ? 'visible' : 'hidden';
