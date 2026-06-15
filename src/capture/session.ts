@@ -25,6 +25,7 @@ export class CaptureSession {
   private lastControlsOffset = -1;
   private lastVideoId = '';
   private active = true;
+  private zhOnly = false;
   private toggleBtn: HTMLButtonElement | null = null;
   private stopWatch?: () => void;
   private settings!: Settings;
@@ -74,6 +75,17 @@ export class CaptureSession {
       this.zhCues = [];
       this.translated.clear();
       this.requested.clear();
+    }
+    if (detail.audioLang) {
+      // Non-English audio → drop the English line and show only the Chinese single subtitle.
+      const zhOnly = !detail.audioLang.toLowerCase().startsWith('en');
+      if (zhOnly !== this.zhOnly) {
+        this.zhOnly = zhOnly;
+        this.overlay.setZhOnly(zhOnly);
+        console.log(
+          `[TwoSub] audio lang=${detail.audioLang} → ${zhOnly ? 'Chinese-only' : 'dual'} subtitles`,
+        );
+      }
     }
     const { learning, native } = this.settings.languages;
     // Pick cues from ONE track per language (preferring a specific variant, e.g. Traditional
@@ -224,7 +236,10 @@ export class CaptureSession {
   private loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
     const v = this.getVideo();
-    if (!v || this.enCues.length === 0) {
+    // Normally we drive off English cues; in Chinese-only mode a title may have no English track,
+    // so fall back to driving off the Chinese cues instead.
+    const haveCues = this.enCues.length > 0 || (this.zhOnly && this.zhCues.length > 0);
+    if (!v || !haveCues) {
       this.overlay.render(null, null);
       return;
     }

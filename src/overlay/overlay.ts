@@ -146,6 +146,11 @@ export class Overlay {
     return !this.popup.hidden;
   }
 
+  // Non-English audio → hide the English line entirely; only the Chinese single subtitle shows.
+  setZhOnly(zhOnly: boolean): void {
+    this.enEl.style.display = zhOnly ? 'none' : '';
+  }
+
   // Toggle off → hide our two lines and let the platform's native subtitles show.
   setActive(active: boolean): void {
     this.active = active;

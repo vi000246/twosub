@@ -9,6 +9,7 @@ export default defineUnlistedScript(() => {
   console.log('[TwoSub] youtube sniffer injected');
   let lastVideo = '';
   let curVid = '';
+  let curAudioLang = '';
   let loggedPr = false;
   let pot = '';
   let potc = '1';
@@ -36,7 +37,13 @@ export default defineUnlistedScript(() => {
   patchXhr();
 
   function emit(tracks: TrackMeta[], cues: Cue[], videoId: string) {
-    const detail: CuesDetail = { platform: 'youtube', tracks, cues, videoId };
+    const detail: CuesDetail = {
+      platform: 'youtube',
+      tracks,
+      cues,
+      videoId,
+      audioLang: curAudioLang || undefined,
+    };
     window.dispatchEvent(new CustomEvent(CUES_EVENT, { detail }));
   }
 
@@ -106,6 +113,11 @@ export default defineUnlistedScript(() => {
     if (!vid || vid === lastVideo) return;
     lastVideo = vid;
     curVid = vid;
+    // The auto-speech-recognition caption track's languageCode reflects the spoken AUDIO language.
+    curAudioLang =
+      (pr?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? []).find(
+        (t: any) => t.kind === 'asr',
+      )?.languageCode ?? '';
     emit([], [], vid); // immediately clear the previous video's subtitles on navigation
 
     const all = pickCaptionTracks(pr);

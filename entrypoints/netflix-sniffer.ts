@@ -10,6 +10,7 @@ import type { Cue, TrackMeta } from '../src/types/cue';
 export default defineUnlistedScript(() => {
   console.log('[TwoSub] netflix sniffer injected');
   let lastSig = '';
+  let nfAudioLang = '';
 
   patchJsonParse();
   patchXhr();
@@ -29,6 +30,19 @@ export default defineUnlistedScript(() => {
       const sig = tracks.map((t) => t.lang + t.url).join('|');
       if (sig === lastSig) return;
       lastSig = sig;
+      // Original-language audio (best-effort proxy for what the viewer is hearing): if the title's
+      // native audio isn't English, we render a Chinese-only single subtitle instead of dual.
+      const at: any[] = m.audio_tracks ?? m.audioTracks ?? [];
+      nfAudioLang = String(
+        at.find((t) => t.isNative)?.language ?? at.find((t) => t.isNative)?.bcp47 ?? at[0]?.language ?? '',
+      );
+      if (at.length)
+        console.log(
+          '[TwoSub] netflix audio:',
+          nfAudioLang || '?',
+          '/',
+          at.map((t) => t.language ?? t.bcp47).join(','),
+        );
       console.log(
         '[TwoSub] netflix raw tracks:',
         (m.timedtexttracks ?? [])
@@ -84,7 +98,12 @@ export default defineUnlistedScript(() => {
         'cues; langs:',
         tracks.map((t) => t.lang).join(','),
       );
-      const detail: CuesDetail = { platform: 'netflix', tracks, cues };
+      const detail: CuesDetail = {
+        platform: 'netflix',
+        tracks,
+        cues,
+        audioLang: nfAudioLang || undefined,
+      };
       window.dispatchEvent(new CustomEvent(CUES_EVENT, { detail }));
     }
   }

@@ -10,6 +10,7 @@ export interface CuesDetail {
   tracks: TrackMeta[];
   cues: Cue[];
   videoId?: string; // SPA platforms (YouTube): lets the session reset cues on video change
+  audioLang?: string; // primary audio language; when non-English → Chinese-only single subtitle
 }
 
 export interface CommandDetail {
