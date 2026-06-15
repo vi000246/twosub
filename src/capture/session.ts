@@ -21,6 +21,7 @@ export class CaptureSession {
   private needsTranslation = false;
   private raf = 0;
   private lastPaused = false;
+  private frame = 0;
   private stopWatch?: () => void;
   private settings!: Settings;
 
@@ -102,6 +103,33 @@ export class CaptureSession {
     );
   }
 
+  // Keep subtitles above the player's bottom control bar while it's visible (mirrors InterSub).
+  private updateControlsOffset(player: HTMLElement): void {
+    if (this.settings.appearance.position === 'top') {
+      this.overlay.setControlsOffset(0);
+      return;
+    }
+    let offset = 0;
+    try {
+      const sel =
+        this.platform === 'youtube'
+          ? '.ytp-chrome-bottom'
+          : this.platform === 'netflix'
+            ? '.watch-video--bottom-controls-container'
+            : '[data-testid="controls"], [class*="ControlsContainer"]';
+      const bar = player.querySelector(sel);
+      const hidden = this.platform === 'youtube' && bar?.getAttribute('aria-hidden') === 'true';
+      const br = bar?.getBoundingClientRect();
+      if (br && br.height > 0 && !hidden) {
+        const pr = player.getBoundingClientRect();
+        offset = Math.min(Math.max(pr.bottom - br.top + 6, 0), pr.height * 0.4);
+      }
+    } catch {
+      /* ignore */
+    }
+    this.overlay.setControlsOffset(offset);
+  }
+
   private loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
     const v = this.getVideo();
@@ -116,19 +144,20 @@ export class CaptureSession {
       this.lastPaused = v.paused;
       this.overlay.setPaused(v.paused);
     }
+    if (player && ++this.frame % 10 === 0) this.updateControlsOffset(player);
+
     const tMs = v.currentTime * 1000;
     const enCue = activeCueAt(this.enCues, tMs);
     let zh: string | null = null;
-    if (enCue) {
-      if (this.needsTranslation) {
+    if (this.needsTranslation) {
+      if (enCue) {
         zh = this.translated.get(enCue.id) ?? null;
         this.prefetch(tMs);
-      } else {
-        // Pair the native line to the English cue's time window (equivalent sentences),
-        // not the raw playhead — the two tracks are segmented differently.
-        const anchorMs = (enCue.startMs + enCue.endMs) / 2;
-        zh = activeCueAt(this.zhCues, anchorMs)?.text ?? activeCueAt(this.zhCues, tMs)?.text ?? null;
       }
+    } else {
+      // Native track: render the ZH cue at its OWN time so a long Chinese line stays visible
+      // across several shorter English cues (disappears only when the ZH cue itself ends).
+      zh = activeCueAt(this.zhCues, tMs)?.text ?? null;
     }
     this.overlay.render(enCue?.text ?? null, zh);
   };

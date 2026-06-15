@@ -18,7 +18,8 @@ const NATIVE_HIDE_CSS: Record<string, string> = {
 const BASE_CSS = `
 :host { all: initial; }
 .ts-container { display:flex; flex-direction:column; align-items:center; gap:2px; width:100%;
-  transform: translateY(calc(-1 * var(--ts-offset-y, 0px))); }
+  transform: translateY(calc(-1 * var(--ts-offset-y, 0px) - var(--ts-controls-offset, 0px)));
+  transition: transform 0.15s ease; }
 .ts-line { max-width:90%; text-align:center; line-height:1.25;
   font-family: system-ui, sans-serif; font-size: var(--ts-font-size, 26px);
   color: var(--ts-color, #fff); background: var(--ts-bg, rgba(0,0,0,.55));
@@ -113,6 +114,10 @@ export class Overlay {
     this.zhEl.style.order = top ? '1' : '0';
     this.host.style.top = s.appearance.position === 'top' ? '0' : '';
     this.host.style.bottom = s.appearance.position === 'top' ? '' : '0';
+  }
+
+  setControlsOffset(px: number): void {
+    this.host.style.setProperty('--ts-controls-offset', `${Math.round(px)}px`);
   }
 
   render(en: string | null, zh: string | null): void {
