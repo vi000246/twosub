@@ -30,6 +30,15 @@ export default defineUnlistedScript(() => {
       if (sig === lastSig) return;
       lastSig = sig;
       console.log(
+        '[TwoSub] netflix raw tracks:',
+        (m.timedtexttracks ?? [])
+          .map(
+            (t: any) =>
+              `${t.language ?? '?'}[${Object.keys(t.ttDownloadables ?? {}).join('/')}]${t.isNoneTrack ? '(none)' : ''}`,
+          )
+          .join(', '),
+      );
+      console.log(
         '[TwoSub] netflix: manifest found,',
         tracks.length,
         'usable tracks:',

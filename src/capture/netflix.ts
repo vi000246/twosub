@@ -1,8 +1,5 @@
 import type { TrackMeta } from '../types/cue';
 
-// Profile preference: WebVTT first (easiest to parse), then TTML/DFXP.
-const PROFILE_PREF = ['webvtt-lssdh-ios8', 'webvtt', 'dfxp-ls-sdh', 'simplesdh', 'dfxp'];
-
 export interface NfTrack {
   lang: string;
   kind: TrackMeta['kind'];
@@ -18,7 +15,13 @@ export function pickTextTracks(manifest: any): NfTrack[] {
   for (const t of tt) {
     if (!t || t.isNoneTrack) continue;
     const dl = t.ttDownloadables ?? {};
-    const profile = PROFILE_PREF.find((p) => dl[p]?.downloadUrls || dl[p]?.urls);
+    const profiles = Object.keys(dl).filter((p) => dl[p]?.downloadUrls || dl[p]?.urls);
+    // Accept ANY downloadable profile (Netflix uses webvtt-lssdh-ios8, dfxp-ls-sdh, imsc1.1, …):
+    // prefer WebVTT, then a TTML-family profile, then whatever exists.
+    const profile =
+      profiles.find((p) => p.includes('webvtt')) ??
+      profiles.find((p) => /dfxp|imsc|ttml|sdh/i.test(p)) ??
+      profiles[0];
     if (!profile) continue;
     const url = firstUrl(dl[profile].downloadUrls ?? dl[profile].urls);
     if (!url) continue;
@@ -26,7 +29,7 @@ export function pickTextTracks(manifest: any): NfTrack[] {
       lang: t.language ?? t.bcp47 ?? 'und',
       kind: t.isForcedNarrative ? 'forced' : t.rawTrackType === 'closedcaptions' ? 'cc' : 'native',
       url,
-      format: profile.startsWith('webvtt') ? 'webvtt' : 'ttml',
+      format: profile.includes('webvtt') ? 'webvtt' : 'ttml',
       label: t.languageDescription,
     });
   }
