@@ -176,20 +176,32 @@ export class CaptureSession {
       this.toggleBtn = b;
       this.updateToggle();
     }
-    const target = this.toggleTarget(player);
-    if (target && this.toggleBtn.parentElement !== target) target.prepend(this.toggleBtn);
+    this.placeToggle(this.toggleBtn, player);
   }
 
-  private toggleTarget(player: HTMLElement): HTMLElement | null {
+  private placeToggle(btn: HTMLButtonElement, player: HTMLElement): void {
     if (this.platform === 'youtube') {
-      return document.querySelector<HTMLElement>(
+      const bar = document.querySelector<HTMLElement>(
         '#movie_player .ytp-right-controls-left, #movie_player .ytp-right-controls',
       );
+      if (bar && btn.parentElement !== bar) bar.prepend(btn);
+      return;
     }
     if (this.platform === 'netflix') {
-      return player.querySelector<HTMLElement>('.watch-video--bottom-controls-container');
+      // Place on the RIGHT side — just before the fullscreen / audio-subtitle button.
+      const anchor = player.querySelector(
+        '[data-uia="control-fullscreen-enter"], [data-uia="control-fullscreen-exit"], [data-uia="control-audio-subtitle"]',
+      );
+      if (anchor?.parentElement) {
+        if (btn.parentElement !== anchor.parentElement) {
+          anchor.parentElement.insertBefore(btn, anchor);
+        }
+        return;
+      }
+      // Fallback: append to the right end of the controls container.
+      const c = player.querySelector<HTMLElement>('.watch-video--bottom-controls-container');
+      if (c && btn.parentElement !== c) c.append(btn);
     }
-    return null;
   }
 
   private toggleActive(): void {
