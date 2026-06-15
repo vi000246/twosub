@@ -84,6 +84,16 @@ export class Overlay {
     this.enEl.addEventListener('mouseout', this.onWordOut);
     this.popup.addEventListener('mouseenter', this.cancelHide);
     this.popup.addEventListener('mouseleave', this.scheduleHide);
+    // Keep word/popup pointer events from reaching the player (Netflix resumes playback on click).
+    const swallow = (e: Event) => {
+      if (e.currentTarget === this.popup || (e.target as HTMLElement | null)?.closest?.('.ts-w')) {
+        e.stopPropagation();
+      }
+    };
+    (['mousedown', 'pointerdown', 'click', 'dblclick'] as const).forEach((ev) => {
+      this.enEl.addEventListener(ev, swallow);
+      this.popup.addEventListener(ev, swallow);
+    });
 
     // Native subtitles are hidden ONLY while we actually render an English line (see render()),
     // so if capture fails the user keeps the platform's own subtitles.
