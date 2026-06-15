@@ -3,21 +3,25 @@ import { pickCaptionTracks, ytFmtUrl } from '../src/capture/youtube';
 import { parseYtJson3 } from '../src/capture/parsers/ytjson3';
 import type { Cue } from '../src/types/cue';
 
-// Runs in YouTube's MAIN world. Reads caption tracks from ytInitialPlayerResponse and
-// from intercepted /youtubei/v1/player responses (SPA navigation), fetches json3 cues,
-// and emits them to the content script.
+// Runs in YouTube's MAIN world. `ytInitialPlayerResponse` is injected by YouTube AFTER
+// document_start, so reading it once at startup misses it — we POLL for it, and also catch
+// SPA navigations via the player API + yt-navigate-finish. Fetches json3 caption tracks.
 export default defineUnlistedScript(() => {
   console.log('[TwoSub] youtube sniffer injected');
   let lastVideo = '';
+  let loggedPr = false;
 
-  tryFromGlobal();
-  window.addEventListener('yt-navigate-finish', () => tryFromGlobal());
-  patchFetch();
-
-  function tryFromGlobal() {
+  setInterval(() => {
     const pr = (window as any).ytInitialPlayerResponse;
     if (pr) void handle(pr);
-  }
+  }, 1000);
+
+  window.addEventListener('yt-navigate-finish', () => {
+    const pr = (window as any).ytInitialPlayerResponse;
+    if (pr) void handle(pr);
+  });
+
+  patchFetch();
 
   function patchFetch() {
     const orig = window.fetch;
@@ -25,12 +29,13 @@ export default defineUnlistedScript(() => {
       const res = await orig(...args);
       try {
         const url = String((args[0] as Request)?.url ?? args[0]);
-        if (url.includes('/youtubei/v1/player'))
+        if (url.includes('/youtubei/v1/player')) {
           res
             .clone()
             .json()
             .then(handle)
             .catch(() => {});
+        }
       } catch {
         /* ignore */
       }
@@ -39,11 +44,20 @@ export default defineUnlistedScript(() => {
   }
 
   async function handle(pr: any) {
+    if (!loggedPr) {
+      loggedPr = true;
+      console.log(
+        '[TwoSub] youtube: ytInitialPlayerResponse seen; keys=',
+        Object.keys(pr || {}).slice(0, 15).join(','),
+      );
+    }
     const vid: string = pr?.videoDetails?.videoId ?? '';
-    const tracks = pickCaptionTracks(pr);
-    if (!tracks.length) return;
-    if (vid && vid === lastVideo) return; // de-dupe repeated player responses
+    if (!vid || vid === lastVideo) return; // not a watch page, or already handled
     lastVideo = vid;
+
+    const tracks = pickCaptionTracks(pr);
+    console.log('[TwoSub] youtube: video', vid, '; caption tracks =', tracks.length);
+    if (!tracks.length) return;
 
     const cues: Cue[] = [];
     for (const t of tracks) {
