@@ -12,8 +12,9 @@ export function ttsAvailable(): boolean {
 export function speak(text: string, rate = 0.9, lang = 'en-US'): boolean {
   if (!ttsAvailable()) return false;
   const synth = (globalThis as unknown as { speechSynthesis: SpeechSynthesis }).speechSynthesis;
-  const Utterance = (globalThis as unknown as { SpeechSynthesisUtterance: typeof SpeechSynthesisUtterance })
-    .SpeechSynthesisUtterance;
+  const Utterance = (
+    globalThis as unknown as { SpeechSynthesisUtterance: typeof SpeechSynthesisUtterance }
+  ).SpeechSynthesisUtterance;
   synth.cancel();
   const u = new Utterance(text);
   u.rate = rate;

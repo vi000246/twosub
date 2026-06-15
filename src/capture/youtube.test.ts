@@ -15,7 +15,12 @@ describe('pickCaptionTracks', () => {
     };
     const t = pickCaptionTracks(pr);
     expect(t).toHaveLength(2);
-    expect(t[0]).toMatchObject({ lang: 'en', kind: 'native', url: 'https://x/en', label: 'English' });
+    expect(t[0]).toMatchObject({
+      lang: 'en',
+      kind: 'native',
+      url: 'https://x/en',
+      label: 'English',
+    });
     expect(t[1].kind).toBe('asr');
   });
 

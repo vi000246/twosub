@@ -59,7 +59,12 @@ export default defineUnlistedScript(() => {
       const res = await orig(...args);
       try {
         const url = String((args[0] as Request)?.url ?? args[0]);
-        if (url.includes('manifest')) res.clone().json().then(onManifest).catch(() => {});
+        if (url.includes('manifest'))
+          res
+            .clone()
+            .json()
+            .then(onManifest)
+            .catch(() => {});
       } catch {
         /* ignore */
       }

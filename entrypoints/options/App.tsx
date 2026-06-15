@@ -117,7 +117,9 @@ export function App() {
           <input
             type="checkbox"
             checked={s.languages.learningOnTop}
-            onChange={(e) => update({ ...s, languages: { ...s.languages, learningOnTop: e.target.checked } })}
+            onChange={(e) =>
+              update({ ...s, languages: { ...s.languages, learningOnTop: e.target.checked } })
+            }
           />
         </label>
       </section>
@@ -142,9 +144,27 @@ export function App() {
   );
 }
 
-const wrap: CSSProperties = { fontFamily: 'system-ui, sans-serif', maxWidth: 560, margin: '0 auto', padding: 24, color: '#111' };
-const card: CSSProperties = { border: '1px solid #ddd', borderRadius: 8, padding: 16, margin: '16px 0' };
+const wrap: CSSProperties = {
+  fontFamily: 'system-ui, sans-serif',
+  maxWidth: 560,
+  margin: '0 auto',
+  padding: 24,
+  color: '#111',
+};
+const card: CSSProperties = {
+  border: '1px solid #ddd',
+  borderRadius: 8,
+  padding: 16,
+  margin: '16px 0',
+};
 const h2: CSSProperties = { fontSize: 15, margin: '0 0 12px' };
-const row: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, margin: '8px 0', fontSize: 14 };
+const row: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 12,
+  margin: '8px 0',
+  fontSize: 14,
+};
 const input: CSSProperties = { flex: '0 0 260px' };
 const hint: CSSProperties = { fontSize: 12, color: '#666', margin: '8px 0 0' };

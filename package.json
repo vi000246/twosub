@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "license": "MIT",
+  "author": "Logan",
+  "homepage": "https://github.com/vi000246/twosub#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vi000246/twosub.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vi000246/twosub/issues"
+  },
   "description": "Bilingual (EN/ZH) dual-subtitle + instant word-learning browser extension for Netflix, YouTube, HBO Max.",
   "scripts": {
     "dev": "wxt",
@@ -13,17 +23,26 @@
     "zip:firefox": "wxt zip -b firefox",
     "compile": "wxt prepare && tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"entrypoints/**/*.{ts,tsx,html}\" \"*.{ts,mjs,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"entrypoints/**/*.{ts,tsx,html}\""
   },
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@wxt-dev/module-react": "^1.1.0",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.4",
     "typescript": "^5.7.0",
+    "typescript-eslint": "^8.61.0",
     "vitest": "^3.0.0",
     "wxt": "^0.20.0"
   }

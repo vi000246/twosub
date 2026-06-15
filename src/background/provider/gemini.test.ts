@@ -4,7 +4,9 @@ import { GeminiProvider } from './gemini';
 function mockGemini(text: string, status = 200) {
   return vi.fn(
     async () =>
-      new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }), { status }),
+      new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }), {
+        status,
+      }),
   );
 }
 

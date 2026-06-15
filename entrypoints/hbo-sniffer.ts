@@ -51,7 +51,11 @@ export default defineUnlistedScript(() => {
         for (const c of parseWebVtt(vtt, t.lang)) {
           if (seen.has(c.id)) continue; // de-dupe boundary cues across segments
           seen.add(c.id);
-          cues.push({ ...c, startMs: c.startMs + t.timingShiftMs, endMs: c.endMs + t.timingShiftMs });
+          cues.push({
+            ...c,
+            startMs: c.startMs + t.timingShiftMs,
+            endMs: c.endMs + t.timingShiftMs,
+          });
         }
       }
     }
@@ -68,7 +72,11 @@ export default defineUnlistedScript(() => {
       try {
         const url = String((args[0] as Request)?.url ?? args[0]);
         if (url.includes('/playback/v1/playbackInfo')) {
-          res.clone().text().then(onPlaybackInfo).catch(() => {});
+          res
+            .clone()
+            .text()
+            .then(onPlaybackInfo)
+            .catch(() => {});
         }
       } catch {
         /* ignore */

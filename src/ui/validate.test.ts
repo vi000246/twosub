@@ -6,7 +6,12 @@ describe('validateSettings', () => {
   it('clamps size/opacity, rejects bad color, defaults empty model', () => {
     const out = validateSettings({
       ...DEFAULT_SETTINGS,
-      appearance: { ...DEFAULT_SETTINGS.appearance, fontSizePx: 999, bgOpacity: 5, textColor: 'red' },
+      appearance: {
+        ...DEFAULT_SETTINGS.appearance,
+        fontSizePx: 999,
+        bgOpacity: 5,
+        textColor: 'red',
+      },
       provider: { ...DEFAULT_SETTINGS.provider, model: '   ' },
     });
     expect(out.appearance.fontSizePx).toBe(60);

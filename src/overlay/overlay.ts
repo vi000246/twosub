@@ -165,7 +165,9 @@ export class Overlay {
       const r = await this.handlers.lookup(word, this.currentEn ?? word);
       if (this.activeWordEl !== el || this.popup.hidden) return; // user moved on / popup closed
       this.popup.innerHTML = r.error || !r.meaning ? noResultHtml(word) : resultHtml(word, r);
-      this.popup.querySelector('.ts-speak')?.addEventListener('click', () => this.handlers?.speak(word));
+      this.popup
+        .querySelector('.ts-speak')
+        ?.addEventListener('click', () => this.handlers?.speak(word));
     } catch {
       this.popup.innerHTML = noResultHtml(word);
     }

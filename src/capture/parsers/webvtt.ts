@@ -8,9 +8,7 @@ export function parseWebVtt(raw: string, lang: string): Cue[] {
     const lines = block.split('\n').filter((l) => l.trim() !== '');
     const arrowIdx = lines.findIndex((l) => l.includes('-->'));
     if (arrowIdx === -1) continue;
-    const [startRaw, endRaw] = lines[arrowIdx]
-      .split('-->')
-      .map((s) => s.trim().split(/\s+/)[0]);
+    const [startRaw, endRaw] = lines[arrowIdx].split('-->').map((s) => s.trim().split(/\s+/)[0]);
     const startMs = toMs(startRaw);
     const endMs = toMs(endRaw);
     if (startMs == null || endMs == null) continue;

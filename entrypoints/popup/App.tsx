@@ -47,5 +47,11 @@ export function App() {
   );
 }
 
-const row: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0', fontSize: 14 };
+const row: CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  margin: '6px 0',
+  fontSize: 14,
+};
 const btn: CSSProperties = { width: '100%', padding: 8, cursor: 'pointer' };

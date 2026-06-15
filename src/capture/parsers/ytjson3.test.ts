@@ -17,7 +17,9 @@ describe('parseYtJson3', () => {
   });
 
   it('accepts a raw JSON string', () => {
-    const raw = JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 500, segs: [{ utf8: 'x' }] }] });
+    const raw = JSON.stringify({
+      events: [{ tStartMs: 0, dDurationMs: 500, segs: [{ utf8: 'x' }] }],
+    });
     expect(parseYtJson3(raw, 'en')[0]).toMatchObject({ startMs: 0, endMs: 500, text: 'x' });
   });
 });

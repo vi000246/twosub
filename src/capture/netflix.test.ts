@@ -19,7 +19,12 @@ describe('pickTextTracks', () => {
       ],
     };
     const t = pickTextTracks(manifest);
-    expect(t[0]).toMatchObject({ lang: 'en', url: 'https://n/en.vtt', format: 'webvtt', kind: 'native' });
+    expect(t[0]).toMatchObject({
+      lang: 'en',
+      url: 'https://n/en.vtt',
+      format: 'webvtt',
+      kind: 'native',
+    });
     expect(t[1]).toMatchObject({ lang: 'zh-Hant', url: 'https://n/zh.xml', format: 'ttml' });
   });
 

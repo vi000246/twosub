@@ -1,0 +1,6 @@
+node_modules/
+.wxt/
+.output/
+package-lock.json
+docs/
+*.md

@@ -24,7 +24,12 @@ export default defineUnlistedScript(() => {
       const res = await orig(...args);
       try {
         const url = String((args[0] as Request)?.url ?? args[0]);
-        if (url.includes('/youtubei/v1/player')) res.clone().json().then(handle).catch(() => {});
+        if (url.includes('/youtubei/v1/player'))
+          res
+            .clone()
+            .json()
+            .then(handle)
+            .catch(() => {});
       } catch {
         /* ignore */
       }
