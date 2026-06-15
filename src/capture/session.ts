@@ -60,18 +60,27 @@ export class CaptureSession {
   private handleCues(detail: CuesDetail): void {
     if (detail.platform !== this.platform) return;
     const { learning, native } = this.settings.languages;
-    const byLang = (l: string) =>
-      detail.cues
-        .filter((c) => c.lang.toLowerCase().startsWith(l))
-        .sort((a, b) => a.startMs - b.startMs);
+    // Pick cues from ONE track per language (preferring a specific variant, e.g. Traditional
+    // Chinese) so we never merge two differently-timed tracks into a garbled / drifting line.
+    const pickByLang = (prefs: string[]): Cue[] => {
+      for (const p of prefs) {
+        const c = detail.cues
+          .filter((x) => x.lang.toLowerCase().startsWith(p))
+          .sort((a, b) => a.startMs - b.startMs);
+        if (c.length) return c;
+      }
+      return [];
+    };
 
-    const en = byLang(learning);
+    const en = pickByLang([learning]);
     if (en.length) this.enCues = en;
 
     const sel = selectTracks(detail.tracks, learning, native);
     this.needsTranslation = sel.needsTranslation;
     if (!sel.needsTranslation) {
-      const zh = byLang(native);
+      const zhPrefs =
+        native === 'zh' ? ['zh-hant', 'zh-tw', 'zh-hk', 'zh', 'zh-hans', 'zh-cn'] : [native];
+      const zh = pickByLang(zhPrefs);
       if (zh.length) this.zhCues = zh;
     }
 
@@ -108,7 +117,10 @@ export class CaptureSession {
         zh = this.translated.get(enCue.id) ?? null;
         this.prefetch(tMs);
       } else {
-        zh = activeCueAt(this.zhCues, tMs)?.text ?? null;
+        // Pair the native line to the English cue's time window (equivalent sentences),
+        // not the raw playhead — the two tracks are segmented differently.
+        const anchorMs = (enCue.startMs + enCue.endMs) / 2;
+        zh = activeCueAt(this.zhCues, anchorMs)?.text ?? activeCueAt(this.zhCues, tMs)?.text ?? null;
       }
     }
     this.overlay.render(enCue?.text ?? null, zh);

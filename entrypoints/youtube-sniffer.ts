@@ -72,6 +72,15 @@ export default defineUnlistedScript(() => {
     };
   }
 
+  // Prefer a manual (non-ASR) track, in language-preference order.
+  function pickBest(tracks: TrackMeta[], prefixes: string[]): TrackMeta | undefined {
+    for (const p of prefixes) {
+      const m = tracks.filter((t) => t.lang.toLowerCase().startsWith(p));
+      if (m.length) return m.find((t) => t.kind !== 'asr') ?? m[0];
+    }
+    return undefined;
+  }
+
   async function handlePr(pr: any) {
     if (!loggedPr) {
       loggedPr = true;
@@ -85,8 +94,11 @@ export default defineUnlistedScript(() => {
     lastVideo = vid;
 
     const all = pickCaptionTracks(pr);
-    const enZh = all.filter((t) => /^(en|zh)/i.test(t.lang));
-    const wanted = enZh.length ? enZh : all.slice(0, 2);
+    const best = [
+      pickBest(all, ['en']),
+      pickBest(all, ['zh-hant', 'zh-tw', 'zh-hk', 'zh', 'zh-hans', 'zh-cn']),
+    ].filter((t): t is TrackMeta => !!t);
+    const wanted = best.length ? best : all.slice(0, 2);
     console.log(
       '[TwoSub] youtube: video',
       vid,
