@@ -6,7 +6,7 @@ import type { Settings } from '../../src/types/settings';
 const PLATFORMS: Array<{ key: keyof Settings['platforms']; label: string; disabled?: boolean }> = [
   { key: 'netflix', label: 'Netflix' },
   { key: 'youtube', label: 'YouTube' },
-  { key: 'hboMax', label: 'HBO Max (coming in a later milestone)', disabled: true },
+  { key: 'hboMax', label: 'HBO Max (best-effort)' },
 ];
 
 export function App() {

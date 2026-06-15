@@ -20,7 +20,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   enabled: true,
-  platforms: { netflix: true, youtube: true, hboMax: false },
+  platforms: { netflix: true, youtube: true, hboMax: true },
   languages: { learning: 'en', native: 'zh', learningOnTop: true },
   appearance: { fontSizePx: 26, bgOpacity: 0.55, textColor: '#ffffff', position: 'bottom', offsetY: 0 },
   provider: { name: 'gemini', apiKey: '', model: 'gemini-2.5-flash' },

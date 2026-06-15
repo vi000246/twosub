@@ -26,9 +26,9 @@ export function App() {
         />
       </label>
       <hr />
-      {(['netflix', 'youtube'] as const).map((p) => (
+      {(['netflix', 'youtube', 'hboMax'] as const).map((p) => (
         <label key={p} style={row}>
-          {p === 'netflix' ? 'Netflix' : 'YouTube'}
+          {{ netflix: 'Netflix', youtube: 'YouTube', hboMax: 'HBO Max' }[p]}
           <input
             type="checkbox"
             checked={s.platforms[p]}
