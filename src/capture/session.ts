@@ -22,6 +22,7 @@ export class CaptureSession {
   private raf = 0;
   private lastPaused = false;
   private frame = 0;
+  private lastControlsOffset = -1;
   private stopWatch?: () => void;
   private settings!: Settings;
 
@@ -105,29 +106,43 @@ export class CaptureSession {
 
   // Keep subtitles above the player's bottom control bar while it's visible (mirrors InterSub).
   private updateControlsOffset(player: HTMLElement): void {
-    if (this.settings.appearance.position === 'top') {
-      this.overlay.setControlsOffset(0);
-      return;
-    }
     let offset = 0;
-    try {
-      const sel =
-        this.platform === 'youtube'
-          ? '.ytp-chrome-bottom'
-          : this.platform === 'netflix'
-            ? '.watch-video--bottom-controls-container'
-            : '[data-testid="controls"], [class*="ControlsContainer"]';
-      const bar = player.querySelector(sel);
-      const hidden = this.platform === 'youtube' && bar?.getAttribute('aria-hidden') === 'true';
-      const br = bar?.getBoundingClientRect();
-      if (br && br.height > 0 && !hidden) {
-        const pr = player.getBoundingClientRect();
-        offset = Math.min(Math.max(pr.bottom - br.top + 6, 0), pr.height * 0.4);
+    if (this.settings.appearance.position !== 'top') {
+      try {
+        offset = this.measureControls(player);
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
     }
-    this.overlay.setControlsOffset(offset);
+    if (offset !== this.lastControlsOffset) {
+      this.lastControlsOffset = offset;
+      this.overlay.setControlsOffset(offset);
+    }
+  }
+
+  private measureControls(player: HTMLElement): number {
+    let bar: Element | null = null;
+    let visible = false;
+    if (this.platform === 'youtube') {
+      // YouTube toggles the `ytp-autohide` class on #movie_player to hide its controls.
+      const mp = (document.querySelector('#movie_player') as HTMLElement | null) ?? player;
+      bar = mp.querySelector('.ytp-chrome-bottom');
+      visible = !mp.classList.contains('ytp-autohide');
+    } else if (this.platform === 'netflix') {
+      // Netflix removes the controls container from the DOM when hidden.
+      bar = player.querySelector(
+        '.watch-video--bottom-controls-container, [data-uia="controls-standard"]',
+      );
+      visible = !!bar;
+    } else {
+      bar = player.querySelector('[data-testid="controls"], [class*="ControlsContainer"]');
+      visible = !!bar;
+    }
+    if (!bar || !visible) return 0;
+    const br = bar.getBoundingClientRect();
+    if (br.height <= 0) return 0;
+    const pr = player.getBoundingClientRect();
+    return Math.min(Math.max(pr.bottom - br.top + 8, 0), pr.height * 0.4);
   }
 
   private loop = (): void => {
