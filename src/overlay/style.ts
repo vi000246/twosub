@@ -5,6 +5,8 @@ export interface CssVars {
   '--ts-bg': string;
   '--ts-color': string;
   '--ts-offset-y': string;
+  '--ts-font-en': string;
+  '--ts-font-zh': string;
 }
 
 // Map appearance settings to the CSS custom properties the overlay reads.
@@ -14,6 +16,8 @@ export function settingsToCssVars(a: Settings['appearance']): CssVars {
     '--ts-bg': `rgba(0, 0, 0, ${clamp01(a.bgOpacity)})`,
     '--ts-color': a.textColor,
     '--ts-offset-y': `${a.position === 'custom' ? a.offsetY : 0}px`,
+    '--ts-font-en': a.fontEn,
+    '--ts-font-zh': a.fontZh,
   };
 }
 

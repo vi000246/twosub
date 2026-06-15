@@ -45,7 +45,8 @@ export class CaptureSession {
       lookup: (word, sentence) => sendMsg('LOOKUP_WORD', { word, sentence, src: 'en', tgt: 'zh' }),
       dict: (word) => sendMsg('DICT_LOOKUP', { word }),
       speak: (word) => {
-        if (this.settings.lookup.ttsEnabled) ttsSpeak(word, this.settings.lookup.ttsRate);
+        if (this.settings.lookup.ttsEnabled)
+          ttsSpeak(word, this.settings.lookup.ttsRate, 'en-GB', this.settings.lookup.voiceURI);
       },
     });
     window.addEventListener(CUES_EVENT, this.onCues);

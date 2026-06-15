@@ -26,7 +26,9 @@ const BASE_CSS = `
   font-family: system-ui, sans-serif; font-size: var(--ts-font-size, 26px);
   color: var(--ts-color, #fff); background: var(--ts-bg, rgba(0,0,0,.55));
   padding: 0 .4em; border-radius: 4px; text-shadow: 0 1px 2px rgba(0,0,0,.9); }
-.ts-zh { font-size: calc(var(--ts-font-size, 26px) * .82); opacity: .95; }
+.ts-en { font-family: var(--ts-font-en, system-ui, sans-serif); }
+.ts-zh { font-size: calc(var(--ts-font-size, 26px) * .82); opacity: .95;
+  font-family: var(--ts-font-zh, system-ui, sans-serif); }
 .ts-w { pointer-events: auto; }
 .ts-container.ts-paused .ts-w:hover { background: rgba(80,140,255,.55); border-radius:3px; cursor:pointer; }
 .ts-popup { position:absolute; pointer-events:auto; width:max-content; max-width:340px; max-height:50vh;

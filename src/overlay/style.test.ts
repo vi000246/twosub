@@ -10,6 +10,8 @@ describe('settingsToCssVars', () => {
         textColor: '#fff',
         position: 'bottom',
         offsetY: 12,
+        fontEn: 'system-ui',
+        fontZh: 'PingFang TC',
       }),
     ).toMatchObject({
       '--ts-font-size': '30px',
@@ -26,6 +28,8 @@ describe('settingsToCssVars', () => {
       textColor: '#000',
       position: 'custom',
       offsetY: 40,
+      fontEn: 'system-ui',
+      fontZh: 'PingFang TC',
     });
     expect(v['--ts-offset-y']).toBe('40px');
     expect(v['--ts-bg']).toBe('rgba(0, 0, 0, 1)');

@@ -12,10 +12,12 @@ export interface Settings {
     textColor: string; // hex
     position: 'bottom' | 'top' | 'custom';
     offsetY: number; // px, when position = custom
+    fontEn: string; // CSS font-family for the English line
+    fontZh: string; // CSS font-family for the Chinese line
   };
   provider: { name: 'gemini'; apiKey: string; model: string };
   // populated now, consumed in M2 (word lookup + TTS)
-  lookup: { source: 'gemini'; ttsEnabled: boolean; ttsRate: number };
+  lookup: { source: 'gemini'; ttsEnabled: boolean; ttsRate: number; voiceURI: string };
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -28,7 +30,9 @@ export const DEFAULT_SETTINGS: Settings = {
     textColor: '#ffffff',
     position: 'bottom',
     offsetY: 0,
+    fontEn: 'system-ui, sans-serif',
+    fontZh: '"PingFang TC", "Microsoft JhengHei", system-ui, sans-serif',
   },
   provider: { name: 'gemini', apiKey: '', model: 'gemini-2.5-flash' },
-  lookup: { source: 'gemini', ttsEnabled: true, ttsRate: 0.9 },
+  lookup: { source: 'gemini', ttsEnabled: true, ttsRate: 0.9, voiceURI: '' },
 };

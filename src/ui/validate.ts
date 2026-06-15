@@ -17,6 +17,9 @@ export function validateSettings(s: Settings): Settings {
         ? s.appearance.textColor
         : '#ffffff',
       offsetY: Math.round(clamp(s.appearance.offsetY, -300, 300, 0)),
+      fontEn: s.appearance.fontEn?.trim() || 'system-ui, sans-serif',
+      fontZh:
+        s.appearance.fontZh?.trim() || '"PingFang TC", "Microsoft JhengHei", system-ui, sans-serif',
     },
     provider: { ...s.provider, model: s.provider.model.trim() || 'gemini-2.5-flash' },
   };

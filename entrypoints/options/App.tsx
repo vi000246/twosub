@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { getSettings, setSettings } from '../../src/core/settings';
 import { validateSettings } from '../../src/ui/validate';
 import type { Settings } from '../../src/types/settings';
+import { listEnglishVoices, speak } from '../../src/overlay/tts';
 
 const PLATFORMS: Array<{ key: keyof Settings['platforms']; label: string; disabled?: boolean }> = [
   { key: 'netflix', label: 'Netflix' },
@@ -9,10 +10,39 @@ const PLATFORMS: Array<{ key: keyof Settings['platforms']; label: string; disabl
   { key: 'hboMax', label: 'HBO Max (best-effort)' },
 ];
 
+const EN_FONTS = [
+  { label: 'System default', value: 'system-ui, sans-serif' },
+  { label: 'Arial', value: 'Arial, Helvetica, sans-serif' },
+  { label: 'Helvetica Neue', value: '"Helvetica Neue", Helvetica, sans-serif' },
+  { label: 'Verdana', value: 'Verdana, Geneva, sans-serif' },
+  { label: 'Georgia (serif)', value: 'Georgia, "Times New Roman", serif' },
+  { label: 'Times (serif)', value: '"Times New Roman", Times, serif' },
+  { label: 'Courier (mono)', value: '"Courier New", Courier, monospace' },
+];
+const ZH_FONTS = [
+  { label: '系統預設', value: 'system-ui, sans-serif' },
+  { label: '黑體（蘋方／微軟正黑）', value: '"PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif' },
+  { label: '蘋方 PingFang', value: '"PingFang TC", sans-serif' },
+  { label: '微軟正黑體', value: '"Microsoft JhengHei", sans-serif' },
+  { label: '思源黑體 Noto Sans', value: '"Noto Sans TC", "Noto Sans CJK TC", sans-serif' },
+  { label: '宋體／明體（serif）', value: '"Songti TC", "PMingLiU", serif' },
+  { label: '楷體 Kai', value: '"Kaiti TC", "DFKai-SB", "BiauKai", serif' },
+  { label: '圓體 Yuan', value: '"Yuanti TC", "Yuanti SC", sans-serif' },
+];
+
 export function App() {
   const [s, setS] = useState<Settings | null>(null);
   useEffect(() => {
     void getSettings().then(setS);
+  }, []);
+  const [voices, setVoices] = useState<Array<{ uri: string; label: string }>>([]);
+  useEffect(() => {
+    const load = () => setVoices(listEnglishVoices());
+    load();
+    if (typeof speechSynthesis !== 'undefined') {
+      speechSynthesis.addEventListener('voiceschanged', load);
+      return () => speechSynthesis.removeEventListener('voiceschanged', load);
+    }
   }, []);
   if (!s) return <p style={{ padding: 16 }}>Loading…</p>;
 
@@ -122,6 +152,61 @@ export function App() {
             }
           />
         </label>
+        <label style={row}>
+          English font
+          <select
+            value={s.appearance.fontEn}
+            style={input}
+            onChange={(e) => ap({ fontEn: e.target.value })}
+          >
+            {EN_FONTS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={row}>
+          Chinese font
+          <select
+            value={s.appearance.fontZh}
+            style={input}
+            onChange={(e) => ap({ fontZh: e.target.value })}
+          >
+            {ZH_FONTS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
+
+      <section style={card}>
+        <h2 style={h2}>Pronunciation (word audio)</h2>
+        <label style={row}>
+          Voice
+          <select
+            value={s.lookup.voiceURI}
+            style={input}
+            onChange={(e) => update({ ...s, lookup: { ...s.lookup, voiceURI: e.target.value } })}
+          >
+            <option value="">Auto (British female)</option>
+            {voices.map((v) => (
+              <option key={v.uri} value={v.uri}>
+                {v.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          style={{ cursor: 'pointer', padding: '6px 10px' }}
+          onClick={() =>
+            speak('Hello, this is a test.', s.lookup.ttsRate, 'en-GB', s.lookup.voiceURI)
+          }
+        >
+          ▶ Test voice
+        </button>
       </section>
 
       <section style={card}>
