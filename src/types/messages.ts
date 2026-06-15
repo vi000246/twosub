@@ -12,7 +12,7 @@ export type Msg =
   | { v: 1; type: 'GET_SETTINGS'; payload: Record<string, never> };
 
 export interface MsgResult {
-  TRANSLATE_CUES: { translations: CueText[] };
+  TRANSLATE_CUES: { translations: CueText[]; error?: string };
   LOOKUP_WORD: { meaning: string; lemma?: string; pos?: string };
   GET_SETTINGS: Settings;
 }

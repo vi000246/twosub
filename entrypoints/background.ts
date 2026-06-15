@@ -1,6 +1,6 @@
-// Background service worker entry.
-// Message handlers (TRANSLATE_CUES / GET_SETTINGS) are registered by the
-// translation orchestrator, wired up in a later task.
+import { registerHandlers } from '../src/background/orchestrator';
+
+// Background service worker entry. Registers TRANSLATE_CUES / GET_SETTINGS handlers.
 export default defineBackground(() => {
-  // registerHandlers() — added when src/background/orchestrator.ts lands.
+  registerHandlers();
 });
