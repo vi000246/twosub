@@ -34,7 +34,10 @@ export default defineUnlistedScript(() => {
       // native audio isn't English, we render a Chinese-only single subtitle instead of dual.
       const at: any[] = m.audio_tracks ?? m.audioTracks ?? [];
       nfAudioLang = String(
-        at.find((t) => t.isNative)?.language ?? at.find((t) => t.isNative)?.bcp47 ?? at[0]?.language ?? '',
+        at.find((t) => t.isNative)?.language ??
+          at.find((t) => t.isNative)?.bcp47 ??
+          at[0]?.language ??
+          '',
       );
       if (at.length)
         console.log(
@@ -65,38 +68,43 @@ export default defineUnlistedScript(() => {
   }
 
   async function loadAndEmit(nf: NfTrack[]) {
-    const cues: Cue[] = [];
-    const tracks: TrackMeta[] = [];
+    const fetched: Array<{ meta: TrackMeta; cues: Cue[] }> = [];
     for (const t of nf) {
-      tracks.push({ lang: t.lang, kind: t.kind, label: t.label, url: t.url });
       try {
         const res = await fetch(t.url);
         const text = await res.text();
         const parsed = t.format === 'webvtt' ? parseWebVtt(text, t.lang) : parseTtml(text, t.lang);
-        console.log(
-          '[TwoSub] netflix track:',
-          t.lang,
-          t.format,
-          'status',
-          res.status,
-          'len',
-          text.length,
-          'cues',
-          parsed.length,
-          '| sample:',
-          text.slice(0, 100).replace(/\n/g, ' '),
-        );
-        cues.push(...parsed);
+        console.log('[TwoSub] netflix track:', t.lang, t.format, res.status, 'cues', parsed.length);
+        fetched.push({
+          meta: { lang: t.lang, kind: t.kind, label: t.label, url: t.url },
+          cues: parsed,
+        });
       } catch (e) {
         console.warn('[TwoSub] netflix track failed:', t.lang, String(e));
       }
+    }
+    // Netflix lists SEVERAL tracks per language (regular / SDH / forced / CDN-duplicates), all with
+    // the SAME lang string — keep only the FULLEST (most cues) per language so the session never
+    // merges differently-timed variants into one garbled, flickering line.
+    const best = new Map<string, { meta: TrackMeta; cues: Cue[] }>();
+    for (const f of fetched) {
+      const cur = best.get(f.meta.lang);
+      if (!cur || f.cues.length > cur.cues.length) best.set(f.meta.lang, f);
+    }
+    const tracks: TrackMeta[] = [];
+    const cues: Cue[] = [];
+    for (const f of best.values()) {
+      tracks.push(f.meta);
+      cues.push(...f.cues);
     }
     if (cues.length) {
       console.log(
         '[TwoSub] netflix sniffer: captured',
         cues.length,
-        'cues; langs:',
-        tracks.map((t) => t.lang).join(','),
+        'cues from',
+        tracks.length,
+        'tracks (1/lang):',
+        [...best.values()].map((f) => `${f.meta.lang}:${f.cues.length}`).join(','),
       );
       const detail: CuesDetail = {
         platform: 'netflix',

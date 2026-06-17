@@ -53,4 +53,37 @@ describe('parseDashTextTracks', () => {
     expect(t[0].segmentUrls).toEqual(['https://cdn.hbo/x/z_0005.vtt']);
     expect(t[0].timingShiftMs).toBe(10000 - 2000); // periodStart 10s - pto 2000/1000 s
   });
+
+  it('substitutes $RepresentationID$ and $Bandwidth$ from the chosen vtt Representation', () => {
+    const mpd = `<MPD><BaseURL>https://cdn.hbo/b/</BaseURL><Period start="PT0S">
+      <AdaptationSet contentType="text" lang="en">
+        <Representation id="r1" bandwidth="256" mimeType="text/vtt">
+          <SegmentTemplate media="$RepresentationID$/$Bandwidth$/$Number$.vtt" startNumber="1">
+            <SegmentTimeline><S t="0" d="1000" r="1"/></SegmentTimeline>
+          </SegmentTemplate>
+        </Representation>
+      </AdaptationSet></Period></MPD>`;
+    const t = parseDashTextTracks(mpd, 'https://cdn.hbo/manifest.mpd');
+    expect(t[0].segmentUrls).toEqual([
+      'https://cdn.hbo/b/r1/256/1.vtt',
+      'https://cdn.hbo/b/r1/256/2.vtt',
+    ]);
+  });
+
+  it('builds $Time$-based URLs from the SegmentTimeline cumulative time', () => {
+    const mpd = `<MPD><BaseURL>https://cdn.hbo/t/</BaseURL><Period start="PT0S">
+      <AdaptationSet contentType="text" lang="es">
+        <Representation id="x" mimeType="text/vtt">
+          <SegmentTemplate media="seg_$Time$.vtt" startNumber="1" timescale="1000">
+            <SegmentTimeline><S t="0" d="5000" r="2"/></SegmentTimeline>
+          </SegmentTemplate>
+        </Representation>
+      </AdaptationSet></Period></MPD>`;
+    const t = parseDashTextTracks(mpd, 'https://cdn.hbo/manifest.mpd');
+    expect(t[0].segmentUrls).toEqual([
+      'https://cdn.hbo/t/seg_0.vtt',
+      'https://cdn.hbo/t/seg_5000.vtt',
+      'https://cdn.hbo/t/seg_10000.vtt',
+    ]);
+  });
 });

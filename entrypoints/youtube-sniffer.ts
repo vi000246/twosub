@@ -15,6 +15,7 @@ export default defineUnlistedScript(() => {
   let potc = '1';
   let potClient = 'WEB';
   let pendingTracks: TrackMeta[] | null = null;
+  let coaxed = false; // did we enable native captions just to harvest a pot for this video?
 
   // #movie_player.getPlayerResponse() always reflects the CURRENT video (updates on SPA nav),
   // unlike window.ytInitialPlayerResponse which is frozen to the initial page load.
@@ -106,7 +107,9 @@ export default defineUnlistedScript(() => {
       loggedPr = true;
       console.log(
         '[TwoSub] youtube: playerResponse keys=',
-        Object.keys(pr || {}).slice(0, 15).join(','),
+        Object.keys(pr || {})
+          .slice(0, 15)
+          .join(','),
       );
     }
     const vid: string = pr?.videoDetails?.videoId ?? '';
@@ -136,13 +139,12 @@ export default defineUnlistedScript(() => {
       pot ? 'yes' : 'no',
     );
     if (!wanted.length) return;
+    coaxed = false; // fresh video → try a clean self-fetch before coaxing captions for a pot
     pendingTracks = wanted;
-    if (pot) void fetchTracks(wanted);
-    else console.log('[TwoSub] youtube: waiting for pot token (start playback)');
+    void fetchTracks(wanted); // many videos serve timedtext without a pot at all
   }
 
   async function fetchTracks(tracks: TrackMeta[]) {
-    if (!pot) return;
     const vid = curVid;
     const cues: Cue[] = [];
     const used: TrackMeta[] = [];
@@ -151,22 +153,57 @@ export default defineUnlistedScript(() => {
       try {
         const u = new URL(t.url, location.href);
         u.searchParams.set('fmt', 'json3');
-        u.searchParams.set('pot', pot);
-        u.searchParams.set('potc', potc);
-        u.searchParams.set('c', potClient);
-        const text = await (await fetch(u.toString())).text();
+        if (pot) {
+          u.searchParams.set('pot', pot);
+          u.searchParams.set('potc', potc);
+          u.searchParams.set('c', potClient);
+        }
+        const res = await fetch(u.toString());
+        const text = await res.text();
         const parsed = parseYtJson3(text, t.lang);
+        console.log(
+          `[TwoSub] youtube fetch ${t.lang}: status=${res.status} bytes=${text.length} cues=${parsed.length} pot=${pot ? 'y' : 'n'}`,
+        );
         if (parsed.length) {
           cues.push(...parsed);
           used.push(t);
         }
-      } catch {
-        /* skip failed track */
+      } catch (e) {
+        console.warn('[TwoSub] youtube track fetch threw:', t.lang, String(e));
       }
     }
     if (vid !== curVid) return; // navigated again while fetching — drop the stale result
+
+    // No native Chinese track? Get a free, perfectly-aligned Chinese line from YouTube's OWN
+    // auto-translate (&tlang=) of the English track — no Gemini/API key needed.
+    const enSrc = used.find((t) => /^en/i.test(t.lang) && t.url);
+    if (cues.length && enSrc?.url && !used.some((t) => /^zh/i.test(t.lang))) {
+      try {
+        const u = new URL(enSrc.url, location.href);
+        u.searchParams.set('fmt', 'json3');
+        u.searchParams.set('tlang', 'zh-Hant');
+        if (pot) {
+          u.searchParams.set('pot', pot);
+          u.searchParams.set('potc', potc);
+          u.searchParams.set('c', potClient);
+        }
+        const zh = parseYtJson3(await (await fetch(u.toString())).text(), 'zh-Hant');
+        if (zh.length) {
+          cues.push(...zh);
+          used.push({ lang: 'zh-Hant', kind: 'native', url: enSrc.url });
+          console.log('[TwoSub] youtube: +', zh.length, 'zh-Hant cues via tlang auto-translate');
+        }
+      } catch (e) {
+        console.warn('[TwoSub] youtube: tlang fetch threw', String(e));
+      }
+    }
+
     if (cues.length) {
       pendingTracks = null;
+      if (coaxed) {
+        setCaptions(false); // we only needed the pot — restore the viewer's captions-off state
+        coaxed = false;
+      }
       console.log(
         '[TwoSub] youtube sniffer: captured',
         cues.length,
@@ -174,8 +211,39 @@ export default defineUnlistedScript(() => {
         used.map((t) => t.lang).join(','),
       );
       emit(used, cues, vid);
+    } else if (!coaxed) {
+      // 0 cues (no pot, or a pot harvested from a non-timedtext request that's invalid here) →
+      // turn native captions ON like the user would, so YouTube issues a pot-bearing timedtext
+      // request we harvest; harvest() then refetches and we switch captions back off.
+      coaxed = true;
+      console.warn('[TwoSub] youtube: 0 cues → coaxing native captions on to harvest a valid pot');
+      setCaptions(true);
     } else {
-      console.warn('[TwoSub] youtube: fetched tracks but parsed 0 cues (will retry on next pot)');
+      console.warn('[TwoSub] youtube: still 0 cues after coax (pot=' + (pot ? 'y' : 'n') + ')');
+    }
+  }
+
+  // Turn YouTube's own captions on/off by clicking its CC button — exactly what a user does, so
+  // it reliably makes the player fetch a pot-bearing timedtext request. Used only to harvest the
+  // pot; our overlay hides the native rendering and we switch it back off once we have cues.
+  function setCaptions(on: boolean) {
+    try {
+      const btn = document.querySelector('.ytp-subtitles-button') as HTMLElement | null;
+      if (!btn) {
+        console.warn('[TwoSub] youtube: CC button not found (controls not ready?)');
+        return;
+      }
+      const pressed = btn.getAttribute('aria-pressed') === 'true';
+      if (on !== pressed) {
+        btn.click();
+        console.log(`[TwoSub] youtube: ${on ? 'enabled' : 'disabled'} native captions (coax)`);
+      } else if (on) {
+        // Already on but we still have no pot — re-toggle to force a fresh timedtext request.
+        btn.click();
+        btn.click();
+      }
+    } catch (e) {
+      console.warn('[TwoSub] youtube: setCaptions threw', String(e));
     }
   }
 });

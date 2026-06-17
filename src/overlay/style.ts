@@ -1,4 +1,4 @@
-import type { Settings } from '../types/settings';
+import type { Appearance } from '../types/settings';
 
 export interface CssVars {
   '--ts-font-size': string;
@@ -10,7 +10,7 @@ export interface CssVars {
 }
 
 // Map appearance settings to the CSS custom properties the overlay reads.
-export function settingsToCssVars(a: Settings['appearance']): CssVars {
+export function settingsToCssVars(a: Appearance): CssVars {
   return {
     '--ts-font-size': `${a.fontSizePx}px`,
     '--ts-bg': `rgba(0, 0, 0, ${clamp01(a.bgOpacity)})`,

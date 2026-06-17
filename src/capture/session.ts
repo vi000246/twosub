@@ -2,13 +2,45 @@ import { CUES_EVENT, type CuesDetail } from '../sniff/events';
 import { selectTracks } from './adapter';
 import { activeCueAt, upcomingCues } from '../overlay/sync';
 import { Overlay } from '../overlay/overlay';
-import { speak as ttsSpeak } from '../overlay/tts';
+import { pronounce } from '../overlay/tts';
 import { sendMsg } from '../core/messaging';
 import { getSettings, watchSettings } from '../core/settings';
 import type { Cue, Platform } from '../types/cue';
-import type { Settings } from '../types/settings';
+import { effectiveAppearance, type Settings } from '../types/settings';
 
 const PREFETCH = 8;
+
+// In-player toggle icon: a caption speech-bubble with two lines (= dual subtitles) + a small 文/A
+// glyph hint. Inline SVG (not <img>) so it renders even under Netflix/HBO's strict img-src CSP;
+// stroke/fill use currentColor to match each player's control-bar colour. An ON/OFF badge (added
+// in ensureToggle) shows state. Replaceable: drop a PNG in and swap innerHTML if preferred.
+const TOGGLE_ICON =
+  `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" aria-hidden="true" role="img" style="display:block">` +
+  `<path d="M5 3.5h14a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 19 16.5H10l-4.2 3.4a.6.6 0 0 1-1-.46V16.5H5A2.5 2.5 0 0 1 2.5 14V6A2.5 2.5 0 0 1 5 3.5Z" fill="currentColor" opacity="0.18"/>` +
+  `<path d="M5 3.5h14a2.5 2.5 0 0 1 2.5 2.5v8A2.5 2.5 0 0 1 19 16.5H10l-4.2 3.4a.6.6 0 0 1-1-.46V16.5H5A2.5 2.5 0 0 1 2.5 14V6A2.5 2.5 0 0 1 5 3.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>` +
+  `<path d="M6.6 8h7.4M6.6 11.4h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>` +
+  `<text x="17.4" y="12" text-anchor="middle" font-weight="800" font-size="7.5" fill="currentColor" font-family="Arial,system-ui,sans-serif">A</text>` +
+  `</svg>`;
+
+// ON/OFF state pill, bottom-right of the button (mirrors Read Frog's toggle affordance).
+const TOGGLE_BADGE =
+  `<span class="twosub-badge" style="position:absolute;bottom:0;right:0;font:800 8px/1 system-ui,sans-serif;` +
+  `padding:1px 3px;border-radius:5px;color:#fff;letter-spacing:.04em;pointer-events:none;` +
+  `box-shadow:0 0 0 1px rgba(0,0,0,.35);">OFF</span>`;
+
+// HBO autohides its control bar by fading a PARENT's opacity while leaving the bar in the DOM.
+// CSS opacity isn't inherited, so checking only the bar reads opacity:1 — walk the ancestor chain
+// and treat the bar as hidden if any ancestor is faded / hidden / collapsed.
+function isElementVisible(el: HTMLElement): boolean {
+  let node: HTMLElement | null = el;
+  for (let i = 0; node && i < 8; i++) {
+    const st = getComputedStyle(node);
+    if (st.display === 'none' || st.visibility === 'hidden') return false;
+    if (parseFloat(st.opacity || '1') <= 0.05) return false;
+    node = node.parentElement;
+  }
+  return true;
+}
 
 // Ties a platform's sniffer output to the on-screen overlay: collects cues, decides
 // native-vs-AI for the Chinese line, prefetches translations, and renders synced to playback.
@@ -45,9 +77,9 @@ export class CaptureSession {
     this.overlay.setHandlers({
       lookup: (word, sentence) => sendMsg('LOOKUP_WORD', { word, sentence, src: 'en', tgt: 'zh' }),
       dict: (word) => sendMsg('DICT_LOOKUP', { word }),
-      speak: (word) => {
+      speak: (word, audioUrl) => {
         if (this.settings.lookup.ttsEnabled)
-          ttsSpeak(word, this.settings.lookup.ttsRate, 'en-GB', this.settings.lookup.voiceURI);
+          pronounce(audioUrl, word, this.settings.lookup.ttsRate);
       },
     });
     window.addEventListener(CUES_EVENT, this.onCues);
@@ -76,8 +108,8 @@ export class CaptureSession {
       this.translated.clear();
       this.requested.clear();
     }
-    if (detail.audioLang) {
-      // Non-English audio → drop the English line and show only the Chinese single subtitle.
+    if (detail.audioLang && this.settings.languages.foreignAudioChineseOnly) {
+      // Opt-in: non-English audio → drop the English line and show only the Chinese subtitle.
       const zhOnly = !detail.audioLang.toLowerCase().startsWith('en');
       if (zhOnly !== this.zhOnly) {
         this.zhOnly = zhOnly;
@@ -133,7 +165,10 @@ export class CaptureSession {
   // Keep subtitles above the player's bottom control bar while it's visible (mirrors InterSub).
   private updateControlsOffset(player: HTMLElement): void {
     let offset = 0;
-    if (this.settings.appearance.position !== 'top') {
+    // Auto-lift above the control bar in bottom AND custom modes (custom just adds a manual offset
+    // on top); only 'top' skips it, since there's no bottom bar to clear up there.
+    const pos = effectiveAppearance(this.settings, this.platform).position;
+    if (pos !== 'top') {
       try {
         offset = this.measureControls(player);
       } catch {
@@ -143,12 +178,15 @@ export class CaptureSession {
     if (offset !== this.lastControlsOffset) {
       this.lastControlsOffset = offset;
       this.overlay.setControlsOffset(offset);
+      if (this.platform === 'hboMax') {
+        console.log(`[TwoSub] hbo controls: pos=${pos} offset=${Math.round(offset)}`);
+      }
     }
   }
 
   private measureControls(player: HTMLElement): number {
-    let bar: Element | null = null;
-    let visible = false;
+    let bar: Element | null;
+    let visible: boolean;
     if (this.platform === 'youtube') {
       // YouTube toggles the `ytp-autohide` class on #movie_player to hide its controls.
       const mp = (document.querySelector('#movie_player') as HTMLElement | null) ?? player;
@@ -161,8 +199,16 @@ export class CaptureSession {
       );
       visible = !!bar;
     } else {
-      bar = player.querySelector('[data-testid="controls"], [class*="ControlsContainer"]');
-      visible = !!bar;
+      // HBO Max — anchor to its real bottom-controls footer (class `ControlsFooter…`); the old
+      // generic selector caught a full-height gradient → subtitles shoved ~40% up the screen. The
+      // bar may live outside our mounted player element, so fall back to a document-level lookup.
+      const q = (sel: string) => player.querySelector(sel) ?? document.querySelector(sel);
+      bar =
+        q('[class*="ControlsFooter"]') ??
+        q('[class*="ControlBar"], [class*="BottomControls"]') ??
+        q('[data-testid="player-ux-scrubber"]') ??
+        q('.vjs-control-bar');
+      visible = !!bar && isElementVisible(bar as HTMLElement);
     }
     if (!bar || !visible) return 0;
     const br = bar.getBoundingClientRect();
@@ -177,11 +223,11 @@ export class CaptureSession {
     if (!this.toggleBtn) {
       const b = document.createElement('button');
       b.className = 'twosub-toggle ytp-button';
-      b.textContent = '雙字';
+      b.innerHTML = TOGGLE_ICON + TOGGLE_BADGE;
       b.style.cssText =
-        'cursor:pointer;background:transparent;border:none;color:#fff;font:600 14px/1.2 system-ui;' +
-        'display:inline-flex;align-items:center;justify-content:center;min-width:40px;height:100%;' +
-        'vertical-align:top;';
+        'position:relative;cursor:pointer;background:transparent;border:none;color:#fff;' +
+        'display:inline-flex;align-items:center;justify-content:center;height:100%;padding:0 8px;' +
+        'flex:0 0 auto;box-sizing:border-box;vertical-align:top;';
       b.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -202,19 +248,33 @@ export class CaptureSession {
       return;
     }
     if (this.platform === 'netflix') {
-      // Place on the RIGHT side — just before the fullscreen / audio-subtitle button.
-      const anchor = player.querySelector(
-        '[data-uia="control-fullscreen-enter"], [data-uia="control-fullscreen-exit"], [data-uia="control-audio-subtitle"]',
-      );
-      if (anchor?.parentElement) {
-        if (btn.parentElement !== anchor.parentElement) {
-          anchor.parentElement.insertBefore(btn, anchor);
+      // Each Netflix control button lives in its OWN slot <div class="medium …"> inside the flex
+      // row. Insert before that SLOT (a sibling control to the left) — inserting INSIDE the slot,
+      // next to the button, overlaps them. Anchor to the native subtitle button (fallback: speed).
+      const sub =
+        player.querySelector<HTMLElement>('[data-uia="control-audio-subtitle"]') ??
+        player.querySelector<HTMLElement>('[data-uia="control-speed"]');
+      const slot = sub?.parentElement;
+      const row = slot?.parentElement;
+      if (slot && row) {
+        if (btn.parentElement !== row || btn.nextElementSibling !== slot) {
+          row.insertBefore(btn, slot);
         }
         return;
       }
       // Fallback: append to the right end of the controls container.
       const c = player.querySelector<HTMLElement>('.watch-video--bottom-controls-container');
       if (c && btn.parentElement !== c) c.append(btn);
+      return;
+    }
+    if (this.platform === 'hboMax') {
+      // Place just to the LEFT of the volume control in HBO's bottom-right cluster.
+      const anchor =
+        document.querySelector('[data-testid="volume-container"]') ??
+        document.querySelector('[data-testid="player-ux-volume-button"]');
+      if (anchor?.parentElement && btn.parentElement !== anchor.parentElement) {
+        anchor.parentElement.insertBefore(btn, anchor);
+      }
     }
   }
 
@@ -226,9 +286,16 @@ export class CaptureSession {
 
   private updateToggle(): void {
     if (!this.toggleBtn) return;
-    this.toggleBtn.style.opacity = this.active ? '1' : '0.45';
-    this.toggleBtn.setAttribute('aria-pressed', String(this.active));
-    this.toggleBtn.title = this.active
+    const on = this.active;
+    const icon = this.toggleBtn.querySelector('svg');
+    if (icon) (icon as SVGElement).style.opacity = on ? '1' : '0.55';
+    const badge = this.toggleBtn.querySelector('.twosub-badge');
+    if (badge instanceof HTMLElement) {
+      badge.textContent = on ? 'ON' : 'OFF';
+      badge.style.background = on ? '#22c55e' : 'rgba(110,110,110,.95)';
+    }
+    this.toggleBtn.setAttribute('aria-pressed', String(on));
+    this.toggleBtn.title = on
       ? 'TwoSub 雙字幕：開（點擊關閉，改用原生字幕）'
       : 'TwoSub 雙字幕：關（點擊開啟）';
   }
@@ -236,9 +303,9 @@ export class CaptureSession {
   private loop = (): void => {
     this.raf = requestAnimationFrame(this.loop);
     const v = this.getVideo();
-    // Normally we drive off English cues; in Chinese-only mode a title may have no English track,
-    // so fall back to driving off the Chinese cues instead.
-    const haveCues = this.enCues.length > 0 || (this.zhOnly && this.zhCues.length > 0);
+    // Render whenever we have EITHER line: English drives dual subtitles, but a title may expose
+    // only a native (e.g. Chinese) track — then we show that single line rather than nothing.
+    const haveCues = this.enCues.length > 0 || this.zhCues.length > 0;
     if (!v || !haveCues) {
       this.overlay.render(null, null);
       return;

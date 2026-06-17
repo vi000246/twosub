@@ -89,10 +89,27 @@ export function registerHandlers(): void {
       }
       case 'DICT_LOOKUP':
         return dictLookup(msg.payload.word, dictCache);
+      case 'FETCH_AUDIO':
+        return fetchAudio(msg.payload.url);
       default:
         return undefined;
     }
   });
+}
+
+// Fetch a pronunciation mp3 in the background (host_permission → no CORS, no page CSP) and hand it
+// to the content script as base64 for CSP-proof Web-Audio playback.
+async function fetchAudio(url: string): Promise<{ b64?: string; error?: string }> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return { error: `AUDIO_HTTP_${res.status}` };
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return { b64: btoa(bin) };
+  } catch {
+    return { error: 'AUDIO_ERROR' };
+  }
 }
 
 const DICT_API = (w: string) =>
@@ -109,14 +126,19 @@ async function dictLookup(word: string, cache: Lru<DictResult>): Promise<DictRes
     const data: any = await res.json();
     const entry = Array.isArray(data) ? data[0] : null;
     if (!entry) return { meanings: [] };
-    const phonetic = entry.phonetic ?? entry.phonetics?.find((p: any) => p.text)?.text ?? undefined;
+    // Prefer the British recording (-uk.mp3) + its IPA; fall back to any audio/phonetic present.
+    const phonetics: any[] = entry.phonetics ?? [];
+    const uk = phonetics.find((p: any) => /-uk\.mp3/i.test(p?.audio ?? ''));
+    const audio = uk?.audio ?? phonetics.find((p: any) => p?.audio)?.audio ?? undefined;
+    const phonetic =
+      uk?.text ?? entry.phonetic ?? phonetics.find((p: any) => p?.text)?.text ?? undefined;
     const meanings = (entry.meanings ?? []).slice(0, 4).map((m: any) => ({
       pos: m.partOfSpeech ?? '',
       defs: (m.definitions ?? [])
         .slice(0, 2)
         .map((d: any) => ({ def: d.definition ?? '', example: d.example })),
     }));
-    const out: DictResult = { phonetic, meanings };
+    const out: DictResult = { phonetic, audio, meanings };
     cache.set(key, out);
     return out;
   } catch {

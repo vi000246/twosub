@@ -9,12 +9,18 @@ export interface HboTrack {
 }
 
 // Parse a DASH MPD into text (subtitle) tracks with resolved WebVTT segment URLs.
-// Regex-based (node-testable); mirrors the fields InterSub reads from HBO's MPD. Best-effort —
-// HBO's manifest shape is relatively flat (Period > AdaptationSet[text] > Representation > SegmentTemplate).
+// Regex-based (node-testable); mirrors the fields InterSub / HBO-Max-Dual-Subtitles read from
+// HBO's MPD (Period > AdaptationSet[text] > Representation[text/vtt] > SegmentTemplate + Timeline).
+// HBO media templates use the full DASH identifier set ($Number$ / $Time$ / $Bandwidth$ /
+// $RepresentationID$, with optional %0Nd padding) — substitute them ALL or the URLs 404.
 export function parseDashTextTracks(mpd: string, manifestUrl: string): HboTrack[] {
   const periodTag = /<Period\b[^>]*>/.exec(mpd)?.[0] ?? '';
   const periodStartSec = parseIsoDuration(attrOf(periodTag, 'start'));
-  const base = resolveUrl(firstBaseUrl(mpd), manifestUrl);
+  // Document base = the MPD/Period-level <BaseURL> (whatever sits BEFORE the first AdaptationSet).
+  // Using the first BaseURL anywhere wrongly picks the audio track's dir (e.g. `a/47680d/`) and
+  // pollutes the text URLs — the real text path is just `<manifest>/t/<hash>/tN/`.
+  const adIdx = mpd.search(/<AdaptationSet\b/);
+  const base = resolveUrl(firstBaseUrl(adIdx >= 0 ? mpd.slice(0, adIdx) : mpd), manifestUrl);
 
   const tracks: HboTrack[] = [];
   for (const m of mpd.matchAll(/<AdaptationSet\b([^>]*)>([\s\S]*?)<\/AdaptationSet>/g)) {
@@ -27,6 +33,14 @@ export function parseDashTextTracks(mpd: string, manifestUrl: string): HboTrack[
     const lang = attrOf(attrs, 'lang') || attrOf(inner, 'lang') || 'und';
     const label = (/<Label\b[^>]*>([\s\S]*?)<\/Label>/.exec(inner)?.[1] ?? '').trim() || undefined;
 
+    // Prefer the WebVTT representation; capture its id + bandwidth for template substitution.
+    const repTag =
+      /<Representation\b[^>]*mimeType\s*=\s*"text\/vtt"[^>]*>/.exec(inner)?.[0] ??
+      /<Representation\b[^>]*>/.exec(inner)?.[0] ??
+      '';
+    const repId = attrOf(repTag, 'id');
+    const bandwidth = attrOf(repTag, 'bandwidth');
+
     const st = /<SegmentTemplate\b([^>]*?)\/?>/.exec(inner)?.[1];
     if (!st) continue;
     const media = attrOf(st, 'media');
@@ -35,18 +49,16 @@ export function parseDashTextTracks(mpd: string, manifestUrl: string): HboTrack[
     const startNumber = toInt(attrOf(st, 'startNumber'), 1);
     const timescale = toInt(attrOf(st, 'timescale'), 1);
     const pto = toInt(attrOf(st, 'presentationTimeOffset'), 0);
-    const repId = attrOf(/<Representation\b[^>]*>/.exec(inner)?.[0] ?? '', 'id');
     const adBase = resolveUrl(firstBaseUrl(inner), base);
-    const count = countSegments(inner);
 
     const segmentUrls: string[] = [];
-    for (let i = 0; i < count; i++) {
-      const n = startNumber + i;
-      const seg = media
-        .replace(/\$RepresentationID\$/g, repId)
-        .replace(/\$Number(?:%0(\d+)d)?\$/g, (_full, w?: string) =>
-          w ? String(n).padStart(Number(w), '0') : String(n),
-        );
+    for (const { number, time } of expandTimeline(inner, startNumber)) {
+      const seg = fillTemplate(media, {
+        RepresentationID: repId,
+        Bandwidth: bandwidth,
+        Number: number,
+        Time: time,
+      });
       segmentUrls.push(resolveUrl(seg, adBase));
     }
 
@@ -59,6 +71,24 @@ export function parseDashTextTracks(mpd: string, manifestUrl: string): HboTrack[
     });
   }
   return onePerLang(tracks);
+}
+
+// DASH media-template substitution: $$ → $, plus $RepresentationID$, $Bandwidth$, $Number$, $Time$,
+// each with optional %0Nd zero-padding (e.g. $Number%04d$). Mirrors the DASH-IF identifier rules.
+function fillTemplate(
+  media: string,
+  vals: { RepresentationID: string; Bandwidth: string; Number: number; Time: number },
+): string {
+  return media.replace(
+    /\$(RepresentationID|Bandwidth|Number|Time)?(?:%0(\d+)d)?\$/g,
+    (_full, id?: string, width?: string) => {
+      if (!id) return '$'; // $$ escapes a literal '$'
+      if (id === 'RepresentationID') return vals.RepresentationID;
+      if (id === 'Bandwidth') return vals.Bandwidth || '0';
+      const raw = String(id === 'Number' ? vals.Number : vals.Time);
+      return width ? raw.padStart(Number(width), '0') : raw;
+    },
+  );
 }
 
 function classifyKind(lang: string, label?: string): TrackMeta['kind'] {
@@ -84,14 +114,34 @@ function score(t: HboTrack): number {
   return 2;
 }
 
-function countSegments(inner: string): number {
+// Expand a SegmentTimeline into {number, time} pairs (number = startNumber + index for $Number$;
+// time = cumulative @t/@d for $Time$). `@r` repeats the segment r additional times. No timeline →
+// a single segment (covers single-file VTT tracks).
+function expandTimeline(
+  inner: string,
+  startNumber: number,
+): Array<{ number: number; time: number }> {
   const tl = /<SegmentTimeline\b[^>]*>([\s\S]*?)<\/SegmentTimeline>/.exec(inner);
-  if (!tl) return 1;
-  let count = 0;
+  if (!tl) return [{ number: startNumber, time: 0 }];
+  const out: Array<{ number: number; time: number }> = [];
+  let n = startNumber;
+  let t = 0;
+  let first = true;
   for (const s of tl[1].matchAll(/<S\b([^>]*?)\/?>/g)) {
-    count += 1 + toInt(attrOf(s[1], 'r'), 0);
+    const attrs = s[1];
+    const explicitT = attrOf(attrs, 't');
+    if (explicitT !== '') t = toInt(explicitT, t);
+    else if (first) t = 0;
+    const d = toInt(attrOf(attrs, 'd'), 0);
+    const reps = 1 + Math.max(0, toInt(attrOf(attrs, 'r'), 0));
+    for (let i = 0; i < reps; i++) {
+      out.push({ number: n, time: t });
+      n += 1;
+      t += d;
+    }
+    first = false;
   }
-  return count || 1;
+  return out.length ? out : [{ number: startNumber, time: 0 }];
 }
 
 function parseIsoDuration(d: string): number {

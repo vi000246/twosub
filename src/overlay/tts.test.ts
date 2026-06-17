@@ -20,7 +20,7 @@ describe('tts', () => {
         constructor(public text: string) {}
       },
     );
-    expect(speak('hello', 0.8, 'en-US')).toBe(true);
-    expect(spoken[0]).toMatchObject({ text: 'hello', rate: 0.8, lang: 'en-US' });
+    expect(speak('hello', 0.8)).toBe(true);
+    expect(spoken[0]).toMatchObject({ text: 'hello', rate: 0.8, lang: 'en-GB' });
   });
 });

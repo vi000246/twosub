@@ -1,4 +1,5 @@
-import type { Settings } from '../types/settings';
+import { effectiveAppearance, type Settings } from '../types/settings';
+import type { Platform } from '../types/cue';
 import type { MsgResult } from '../types/messages';
 import { settingsToCssVars } from './style';
 
@@ -8,13 +9,15 @@ type DictResult = MsgResult['DICT_LOOKUP'];
 export interface OverlayHandlers {
   lookup: (word: string, sentence: string) => Promise<LookupResult>;
   dict: (word: string) => Promise<DictResult>;
-  speak: (word: string) => void;
+  speak: (word: string, audioUrl?: string) => void;
 }
 
 // Selectors for each platform's native subtitle container (hidden so only our overlay shows).
 const NATIVE_HIDE_CSS: Record<string, string> = {
   netflix: '.player-timedtext { display: none !important; }',
   youtube: '.ytp-caption-window-container { display: none !important; }',
+  hboMax:
+    '[data-testid="player-ux-asset-subtitle"], .captions, [class*="CaptionsRenderer"] { display: none !important; }',
 };
 
 const BASE_CSS = `
@@ -69,7 +72,7 @@ export class Overlay {
   private hoverTimer = 0;
   private hideTimer = 0;
 
-  constructor(platform: string) {
+  constructor(private platform: Platform) {
     this.host = document.createElement('div');
     this.host.id = 'twosub-overlay-host';
     this.host.style.cssText =
@@ -128,14 +131,15 @@ export class Overlay {
   }
 
   applySettings(s: Settings): void {
-    for (const [k, v] of Object.entries(settingsToCssVars(s.appearance))) {
+    const a = effectiveAppearance(s, this.platform);
+    for (const [k, v] of Object.entries(settingsToCssVars(a))) {
       this.host.style.setProperty(k, v);
     }
     const top = s.languages.learningOnTop;
     this.enEl.style.order = top ? '0' : '1';
     this.zhEl.style.order = top ? '1' : '0';
-    this.host.style.top = s.appearance.position === 'top' ? '0' : '';
-    this.host.style.bottom = s.appearance.position === 'top' ? '' : '0';
+    this.host.style.top = a.position === 'top' ? '0' : '';
+    this.host.style.bottom = a.position === 'top' ? '' : '0';
   }
 
   setControlsOffset(px: number): void {
@@ -216,21 +220,27 @@ export class Overlay {
       `<span class="ts-word">${esc(word)}</span></div><div class="ts-note">查詢中…</div>`;
     this.popup.hidden = false;
     this.popup.scrollTop = 0;
-    this.popup
-      .querySelector('.ts-speak')
-      ?.addEventListener('click', () => this.handlers?.speak(word));
-    if (speak) this.handlers?.speak(word);
+    this.bindSpeak(word, undefined);
     if (!this.handlers) return;
     const h = this.handlers;
-    const [meaning, dict] = await Promise.all([
-      Promise.resolve(h.lookup(word, this.currentEn ?? word)).catch(() => null),
-      Promise.resolve(h.dict(word)).catch(() => null),
-    ]);
+    // Dictionary (fast, carries the British audio URL) + Gemini meaning (slower) in parallel.
+    const dictP = Promise.resolve(h.dict(word)).catch(() => null);
+    const meaningP = Promise.resolve(h.lookup(word, this.currentEn ?? word)).catch(() => null);
+    // Auto-pronounce as soon as the audio URL is known — don't wait for the slow meaning lookup.
+    if (speak)
+      void dictP.then((d) => {
+        if (this.activeWordEl === el && !this.popup.hidden) h.speak(word, d?.audio);
+      });
+    const [meaning, dict] = await Promise.all([meaningP, dictP]);
     if (this.activeWordEl !== el || this.popup.hidden) return; // user moved on / popup closed
     this.popup.innerHTML = dictCardHtml(word, meaning, dict);
+    this.bindSpeak(word, dict?.audio);
+  }
+
+  private bindSpeak(word: string, audioUrl?: string): void {
     this.popup
       .querySelector('.ts-speak')
-      ?.addEventListener('click', () => this.handlers?.speak(word));
+      ?.addEventListener('click', () => this.handlers?.speak(word, audioUrl));
   }
 
   private positionPopup(el: HTMLElement): void {

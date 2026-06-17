@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { getSettings, setSettings } from '../../src/core/settings';
 import { validateSettings } from '../../src/ui/validate';
 import type { Settings } from '../../src/types/settings';
-import { listEnglishVoices, speak } from '../../src/overlay/tts';
+import { speak } from '../../src/overlay/tts';
 
 const PLATFORMS: Array<{ key: keyof Settings['platforms']; label: string; disabled?: boolean }> = [
   { key: 'netflix', label: 'Netflix' },
@@ -21,7 +21,10 @@ const EN_FONTS = [
 ];
 const ZH_FONTS = [
   { label: '系統預設', value: 'system-ui, sans-serif' },
-  { label: '黑體（蘋方／微軟正黑）', value: '"PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif' },
+  {
+    label: '黑體（蘋方／微軟正黑）',
+    value: '"PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif',
+  },
   { label: '蘋方 PingFang', value: '"PingFang TC", sans-serif' },
   { label: '微軟正黑體', value: '"Microsoft JhengHei", sans-serif' },
   { label: '思源黑體 Noto Sans', value: '"Noto Sans TC", "Noto Sans CJK TC", sans-serif' },
@@ -35,15 +38,7 @@ export function App() {
   useEffect(() => {
     void getSettings().then(setS);
   }, []);
-  const [voices, setVoices] = useState<Array<{ uri: string; label: string }>>([]);
-  useEffect(() => {
-    const load = () => setVoices(listEnglishVoices());
-    load();
-    if (typeof speechSynthesis !== 'undefined') {
-      speechSynthesis.addEventListener('voiceschanged', load);
-      return () => speechSynthesis.removeEventListener('voiceschanged', load);
-    }
-  }, []);
+  const [target, setTarget] = useState<'default' | keyof Settings['platforms']>('default');
   if (!s) return <p style={{ padding: 16 }}>Loading…</p>;
 
   const update = (next: Settings) => {
@@ -51,8 +46,35 @@ export function App() {
     setS(v);
     void setSettings(v);
   };
-  const ap = (patch: Partial<Settings['appearance']>) =>
-    update({ ...s, appearance: { ...s.appearance, ...patch } });
+
+  // Appearance editing is scoped to the dropdown target: 'default' edits the base look applied to
+  // every platform; a platform target edits that platform's override (null until enabled).
+  const platformTarget = target === 'default' ? null : target;
+  const isDefault = platformTarget === null;
+  const override = platformTarget ? s.platformAppearance[platformTarget] : null;
+  const usingCustom = isDefault || override !== null;
+  const view = override ?? s.appearance; // what the editor currently shows
+  const ap = (patch: Partial<Settings['appearance']>) => {
+    if (platformTarget === null) {
+      update({ ...s, appearance: { ...s.appearance, ...patch } });
+    } else {
+      const base = s.platformAppearance[platformTarget] ?? s.appearance;
+      update({
+        ...s,
+        platformAppearance: { ...s.platformAppearance, [platformTarget]: { ...base, ...patch } },
+      });
+    }
+  };
+  const setOverride = (on: boolean) => {
+    if (platformTarget === null) return;
+    update({
+      ...s,
+      platformAppearance: {
+        ...s.platformAppearance,
+        [platformTarget]: on ? { ...s.appearance } : null,
+      },
+    });
+  };
 
   return (
     <div style={wrap}>
@@ -89,61 +111,126 @@ export function App() {
       </section>
 
       <section style={card}>
-        <h2 style={h2}>Appearance</h2>
+        <h2 style={h2}>Appearance · 字幕外觀</h2>
         <label style={row}>
-          Font size — {s.appearance.fontSizePx}px
-          <input
-            type="range"
-            min={14}
-            max={60}
-            value={s.appearance.fontSizePx}
-            onChange={(e) => ap({ fontSizePx: Number(e.target.value) })}
-          />
-        </label>
-        <label style={row}>
-          Background — {Math.round(s.appearance.bgOpacity * 100)}%
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(s.appearance.bgOpacity * 100)}
-            onChange={(e) => ap({ bgOpacity: Number(e.target.value) / 100 })}
-          />
-        </label>
-        <label style={row}>
-          Text color
-          <input
-            type="color"
-            value={s.appearance.textColor}
-            onChange={(e) => ap({ textColor: e.target.value })}
-          />
-        </label>
-        <label style={row}>
-          Position
+          調整對象 (Platform)
           <select
-            value={s.appearance.position}
+            value={target}
             style={input}
-            onChange={(e) => ap({ position: e.target.value as Settings['appearance']['position'] })}
+            onChange={(e) => setTarget(e.target.value as typeof target)}
           >
-            <option value="bottom">Bottom</option>
-            <option value="top">Top</option>
-            <option value="custom">Custom offset</option>
+            <option value="default">預設（套用所有平台）</option>
+            <option value="netflix">Netflix</option>
+            <option value="youtube">YouTube</option>
+            <option value="hboMax">HBO Max</option>
           </select>
         </label>
-        {s.appearance.position === 'custom' && (
+        {!isDefault && (
           <label style={row}>
-            Offset Y — {s.appearance.offsetY}px
+            為此平台單獨設定（覆蓋預設）
             <input
-              type="range"
-              min={-200}
-              max={200}
-              value={s.appearance.offsetY}
-              onChange={(e) => ap({ offsetY: Number(e.target.value) })}
+              type="checkbox"
+              checked={override !== null}
+              onChange={(e) => setOverride(e.target.checked)}
             />
           </label>
         )}
+        {!isDefault && override === null && (
+          <p style={hint}>
+            此平台目前沿用「預設」外觀。勾選上方即可單獨調整字體、位置、背景與顏色。
+          </p>
+        )}
+
+        <fieldset
+          disabled={!usingCustom}
+          style={{ border: 'none', padding: 0, margin: 0, opacity: usingCustom ? 1 : 0.45 }}
+        >
+          <label style={row}>
+            Font size — {view.fontSizePx}px
+            <input
+              type="range"
+              min={14}
+              max={60}
+              value={view.fontSizePx}
+              onChange={(e) => ap({ fontSizePx: Number(e.target.value) })}
+            />
+          </label>
+          <label style={row}>
+            Background — {Math.round(view.bgOpacity * 100)}%
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={Math.round(view.bgOpacity * 100)}
+              onChange={(e) => ap({ bgOpacity: Number(e.target.value) / 100 })}
+            />
+          </label>
+          <label style={row}>
+            Text color
+            <input
+              type="color"
+              value={view.textColor}
+              onChange={(e) => ap({ textColor: e.target.value })}
+            />
+          </label>
+          <label style={row}>
+            Position
+            <select
+              value={view.position}
+              style={input}
+              onChange={(e) =>
+                ap({ position: e.target.value as Settings['appearance']['position'] })
+              }
+            >
+              <option value="bottom">Bottom（自動避開控制列）</option>
+              <option value="top">Top</option>
+              <option value="custom">Custom offset（手動微調）</option>
+            </select>
+          </label>
+          {view.position === 'custom' && (
+            <label style={row}>
+              Offset Y — {view.offsetY}px
+              <input
+                type="range"
+                min={-200}
+                max={200}
+                value={view.offsetY}
+                onChange={(e) => ap({ offsetY: Number(e.target.value) })}
+              />
+            </label>
+          )}
+          <label style={row}>
+            English font
+            <select
+              value={view.fontEn}
+              style={input}
+              onChange={(e) => ap({ fontEn: e.target.value })}
+            >
+              {EN_FONTS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label style={row}>
+            Chinese font
+            <select
+              value={view.fontZh}
+              style={input}
+              onChange={(e) => ap({ fontZh: e.target.value })}
+            >
+              {ZH_FONTS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </fieldset>
+
         <label style={row}>
-          English on top
+          English on top（所有平台）
           <input
             type="checkbox"
             checked={s.languages.learningOnTop}
@@ -153,59 +240,30 @@ export function App() {
           />
         </label>
         <label style={row}>
-          English font
-          <select
-            value={s.appearance.fontEn}
-            style={input}
-            onChange={(e) => ap({ fontEn: e.target.value })}
-          >
-            {EN_FONTS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label style={row}>
-          Chinese font
-          <select
-            value={s.appearance.fontZh}
-            style={input}
-            onChange={(e) => ap({ fontZh: e.target.value })}
-          >
-            {ZH_FONTS.map((f) => (
-              <option key={f.value} value={f.value}>
-                {f.label}
-              </option>
-            ))}
-          </select>
+          外語發音時只顯示中文（隱藏英文行）
+          <input
+            type="checkbox"
+            checked={s.languages.foreignAudioChineseOnly}
+            onChange={(e) =>
+              update({
+                ...s,
+                languages: { ...s.languages, foreignAudioChineseOnly: e.target.checked },
+              })
+            }
+          />
         </label>
       </section>
 
       <section style={card}>
-        <h2 style={h2}>Pronunciation (word audio)</h2>
-        <label style={row}>
-          Voice
-          <select
-            value={s.lookup.voiceURI}
-            style={input}
-            onChange={(e) => update({ ...s, lookup: { ...s.lookup, voiceURI: e.target.value } })}
-          >
-            <option value="">Auto (British female)</option>
-            {voices.map((v) => (
-              <option key={v.uri} value={v.uri}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <h2 style={h2}>Pronunciation · 發音</h2>
+        <p style={hint}>
+          優先播放字典的英式錄音（dictionaryapi.dev），查無錄音時改用系統英式女聲。
+        </p>
         <button
           style={{ cursor: 'pointer', padding: '6px 10px' }}
-          onClick={() =>
-            speak('Hello, this is a test.', s.lookup.ttsRate, 'en-GB', s.lookup.voiceURI)
-          }
+          onClick={() => speak('Hello, this is a test.', s.lookup.ttsRate)}
         >
-          ▶ Test voice
+          ▶ 測試語音
         </button>
       </section>
 
